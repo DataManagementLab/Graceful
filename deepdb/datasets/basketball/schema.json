@@ -1,0 +1,102 @@
+{
+  "name": "basketball",
+  "csv_kwargs": {
+    "sep": "\t"
+  },
+  "db_load_kwargs": {
+    "postgres": "DELIMITER '\t' QUOTE '\"' ESCAPE '\\' NULL 'NULL' CSV HEADER;"
+  },
+  "tables": [
+    "players",
+    "series_post",
+    "awards_players",
+    "draft",
+    "awards_coaches",
+    "player_allstar",
+    "teams",
+    "players_teams",
+    "coaches"
+  ],
+  "relationships": [
+    [
+      "awards_coaches",
+      [
+        "coachID"
+      ],
+      "coaches",
+      [
+        "coachID"
+      ]
+    ],
+    [
+      "awards_players",
+      [
+        "playerID"
+      ],
+      "players",
+      [
+        "playerID"
+      ]
+    ],
+    [
+      "coaches",
+      [
+        "tmID"
+      ],
+      "teams",
+      [
+        "tmID"
+      ]
+    ],
+    [
+      "draft",
+      [
+        "tmID"
+      ],
+      "teams",
+      [
+        "tmID"
+      ]
+    ],
+    [
+      "player_allstar",
+      [
+        "playerID"
+      ],
+      "players",
+      [
+        "playerID"
+      ]
+    ],
+    [
+      "players_teams",
+      [
+        "playerID"
+      ],
+      "players",
+      [
+        "playerID"
+      ]
+    ],
+    [
+      "players_teams",
+      [
+        "tmID"
+      ],
+      "teams",
+      [
+        "tmID"
+      ]
+    ],
+    [
+      "series_post",
+      [
+        "tmIDWinner"
+      ],
+      "teams",
+      [
+        "tmID"
+      ]
+    ]
+  ]
+}

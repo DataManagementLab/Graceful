@@ -1,0 +1,38 @@
+,Name,No_Args,Args,Output
+,ceil,1,Number,Number
+,comb,2,"Integer, Integer",Number
+,copysign,2,"Number, Number",Number
+,fabs,1,Number,Number
+,factorial,1,Integer,Number
+,floor,1,Number,Number
+,fmod,2,"Number, Number",Number
+,frexp,1,Number,Tuple
+,gcd,2,Integer,Number
+,isclose,2,"Number, Number",Boolean
+,isfinite,1,Number,Boolean
+,isinf,1,Number,Boolean
+,isnan,1,Number,Boolean
+,isqrt,1,Integer,Number
+,lcm,Many,Integer,Number
+,ldexp,2,"Number, Integer",Number
+,modf,1,Number,Tuple
+,perm,2,"Integer, Integer",Number
+,remainder,2,"Number, Number",Number
+,trunc,1,Number,Number
+,exp,1,Number,Number
+,expm1,1,Number,Number
+,log,2,"Number, Number",Number
+,log1p,1,Number,Number
+,log2,1,Number,Number
+,log10,1,Number,Number
+,pow,2,"Integer, Integer",Number
+,sqrt,1,Number,Number
+,cos,1,Number,Number
+,sin,1,Number,Number
+,tan,1,Number,Number
+,degrees,1,Number,Number
+,radians,1,Number,Number
+,erf,1,Number,Number
+,erfc,1,Number,Number
+,gamma,1,Number,Number
+,lgamma,1,Number,Number

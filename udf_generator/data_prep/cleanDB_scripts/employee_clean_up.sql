@@ -1,0 +1,11 @@
+DELETE FROM "departments" WHERE "dept_no" IS NULL OR "dept_name" IS NULL;
+DELETE FROM "dept_emp" WHERE "emp_no" IS NULL OR "emp_no" = 0;
+DELETE FROM "dept_emp" WHERE "dept_no" IS NULL OR "from_date" IS NULL OR "to_date" IS NULL;
+DELETE FROM "dept_manager" WHERE "emp_no" IS NULL OR "emp_no" = 0;
+DELETE FROM "dept_manager" WHERE "dept_no" IS NULL OR "from_date" IS NULL OR "to_date" IS NULL;
+DELETE FROM "employees" WHERE "emp_no" IS NULL OR "emp_no" = 0;
+DELETE FROM "employees" WHERE "birth_date" IS NULL OR "first_name" IS NULL OR "last_name" IS NULL OR "gender" IS NULL OR "hire_date" IS NULL;
+DELETE FROM "salaries" WHERE "emp_no" IS NULL OR "emp_no" = 0 OR "salary" IS NULL OR "salary" = 0;
+DELETE FROM "salaries" WHERE "from_date" IS NULL OR "to_date" IS NULL;
+DELETE FROM "titles" WHERE "emp_no" IS NULL OR "emp_no" = 0;
+DELETE FROM "titles" WHERE "title" IS NULL OR "from_date" IS NULL OR "to_date" IS NULL;

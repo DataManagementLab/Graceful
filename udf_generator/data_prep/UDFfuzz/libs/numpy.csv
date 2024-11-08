@@ -1,0 +1,14 @@
+Name,No_Args,Args,Output
+exp,1,Number,Number
+sqrt,1,Number,Number
+sin,1,Number,Number
+cos,1,Number,Number
+log,1,Number,Number
+add,2,"Number,Number",Number
+multiply,2,"Number, Number",Number
+divide,2,"Number,Number",Number
+subtract,2,"Number,Number",Number
+power,2,"Number,Number",Number
+mod,2,"Number,Number",Number
+remainder,2,"Number,Number",Number
+reciprocal,1,Number,Number

@@ -1,0 +1,11 @@
+DELETE FROM "Bio" WHERE "b_id" IS NULL OR "b_id" = 0;
+DELETE FROM "Bio" WHERE "fibros" IS NULL OR "activity" IS NULL;
+DELETE FROM "dispat" WHERE "m_id" IS NULL OR "m_id" = 0;
+DELETE FROM "dispat" WHERE "sex" IS NULL OR "age" IS NULL OR "Type" IS NULL;
+DELETE FROM "indis" WHERE "in_id" IS NULL OR "in_id" = 0;
+DELETE FROM "indis" WHERE "got" IS NULL OR "gpt" IS NULL OR "alb" IS NULL OR "tbil" IS NULL OR "dbil" IS NULL OR "che" IS NULL OR "ttt" IS NULL OR "ztt" IS NULL OR "tcho" IS NULL OR "tp" IS NULL;
+DELETE FROM "inf" WHERE "a_id" IS NULL OR "a_id" = 0;
+DELETE FROM "inf" WHERE "dur" IS NULL;
+DELETE FROM "rel11" WHERE "b_id" IS NULL OR "b_id" = 0 OR "m_id" IS NULL OR "m_id" = 0;
+DELETE FROM "rel12" WHERE "in_id" IS NULL OR "in_id" = 0 OR "m_id" IS NULL OR "m_id" = 0;
+DELETE FROM "rel13" WHERE "a_id" IS NULL OR "a_id" = 0 OR "m_id" IS NULL OR "m_id" = 0;

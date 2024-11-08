@@ -1,0 +1,18 @@
+DELETE FROM "actors" WHERE "actorid" IS NULL OR "actorid" = 0;
+DELETE FROM "actors" WHERE "a_gender" IS NULL OR "a_quality" IS NULL;
+UPDATE "actors" SET "a_quality" = "a_quality" + 1;
+DELETE FROM "directors" WHERE "directorid" IS NULL OR "directorid" = 0;
+DELETE FROM "directors" WHERE "d_quality" IS NULL OR "avg_revenue" IS NULL;
+UPDATE "directors" SET "d_quality" = "d_quality" + 1, "avg_revenue" = "avg_revenue" + 1;
+DELETE FROM "movies" WHERE "movieid" IS NULL OR "movieid" = 0;
+DELETE FROM "movies" WHERE "year" IS NULL OR "isEnglish" IS NULL OR "country" IS NULL OR "runningtime" IS NULL;
+UPDATE "movies" SET "year" = "year" + 1, "runningtime" = "runningtime" + 1;
+DELETE FROM "movies2actors" WHERE "movieid" IS NULL OR "movieid" = 0 OR "actorid" IS NULL OR "actorid" = 0;
+DELETE FROM "movies2actors" WHERE "cast_num" IS NULL;
+UPDATE "movies2actors" SET "cast_num" = "cast_num" + 1;
+DELETE FROM "movies2directors" WHERE "movieid" IS NULL OR "movieid" = 0 OR "directorid" IS NULL OR "directorid" = 0;
+DELETE FROM "movies2directors" WHERE "genre" IS NULL;
+DELETE FROM "u2base" WHERE "userid" IS NULL OR "userid" = 0 OR "movieid" IS NULL OR "movieid" = 0;
+DELETE FROM "u2base" WHERE "rating" IS NULL;
+DELETE FROM "users" WHERE "userid" IS NULL OR "userid" = 0;
+DELETE FROM "users" WHERE "age" IS NULL OR "u_gender" IS NULL OR "occupation" IS NULL;

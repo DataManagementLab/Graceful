@@ -1,0 +1,856 @@
+{
+  "query_list": [
+    {
+      "analyze_plans": [
+        [
+          [
+            "Aggregate  (cost=129823.23..129823.24 rows=1 width=8) (actual time=431.239..431.241 rows=1 loops=1)"
+          ],
+          [
+            "  ->  Hash Join  (cost=2.13..129817.83 rows=2163 width=0) (actual time=431.233..431.235 rows=0 loops=1)"
+          ],
+          [
+            "        Hash Cond: (nesreca.upravna_enota = upravna_enota.id_upravna_enota)"
+          ],
+          [
+            "        ->  Seq Scan on nesreca  (cost=0.00..129428.26 rows=138427 width=5) (actual time=431.163..431.163 rows=1 loops=1)"
+          ],
+          [
+            "              Filter: ((vzrok_nesreca <> 'VO'::bpchar) AND ((func_5(tip_nesreca, stanje_povrsina_vozisce, stanje_vozisce, upravna_enota, id_nesreca, x_wgs84, x, y_wgs84))::numeric <= 388302.29069827584))"
+          ],
+          [
+            "              Rows Removed by Filter: 2023"
+          ],
+          [
+            "        ->  Hash  (cost=2.12..2.12 rows=1 width=5) (actual time=0.036..0.037 rows=0 loops=1)"
+          ],
+          [
+            "              Buckets: 1024  Batches: 1  Memory Usage: 8kB"
+          ],
+          [
+            "              ->  Seq Scan on upravna_enota  (cost=0.00..2.12 rows=1 width=5) (actual time=0.036..0.036 rows=0 loops=1)"
+          ],
+          [
+            "                    Filter: ((st_prebivalcev <> 31583) AND (povrsina >= 848) AND ((ime_upravna_enota)::text = 'Šmarje pri Jelšah'::text))"
+          ],
+          [
+            "                    Rows Removed by Filter: 64"
+          ],
+          [
+            "Planning Time: 0.636 ms"
+          ],
+          [
+            "JIT:"
+          ],
+          [
+            "  Functions: 15"
+          ],
+          [
+            "  Options: Inlining false, Optimization false, Expressions true, Deforming true"
+          ],
+          [
+            "  Timing: Generation 1.656 ms, Inlining 0.000 ms, Optimization 0.754 ms, Emission 12.392 ms, Total 14.801 ms"
+          ],
+          [
+            "Execution Time: 474.900 ms"
+          ]
+        ]
+      ],
+      "verbose_plan": [
+        [
+          "Aggregate  (cost=129823.23..129823.24 rows=1 width=8)"
+        ],
+        [
+          "  Output: count(*)"
+        ],
+        [
+          "  ->  Hash Join  (cost=2.13..129817.83 rows=2163 width=0)"
+        ],
+        [
+          "        Inner Unique: true"
+        ],
+        [
+          "        Hash Cond: (nesreca.upravna_enota = upravna_enota.id_upravna_enota)"
+        ],
+        [
+          "        ->  Seq Scan on public.nesreca  (cost=0.00..129428.26 rows=138427 width=5)"
+        ],
+        [
+          "              Output: nesreca.id_nesreca, nesreca.klas_nesreca, nesreca.upravna_enota, nesreca.cas_nesreca, nesreca.naselje_ali_izven, nesreca.kategorija_cesta, nesreca.oznaka_cesta_ali_naselje, nesreca.tekst_cesta_ali_naselje, nesreca.oznaka_odsek_ali_ulica, nesreca.tekst_odsek_ali_ulica, nesreca.stacionazna_ali_hisna_st, nesreca.opis_prizorisce, nesreca.vzrok_nesreca, nesreca.tip_nesreca, nesreca.vreme_nesreca, nesreca.stanje_promet, nesreca.stanje_vozisce, nesreca.stanje_povrsina_vozisce, nesreca.x, nesreca.y, nesreca.x_wgs84, nesreca.y_wgs84"
+        ],
+        [
+          "              Filter: ((nesreca.vzrok_nesreca <> 'VO'::bpchar) AND ((func_5(nesreca.tip_nesreca, nesreca.stanje_povrsina_vozisce, nesreca.stanje_vozisce, nesreca.upravna_enota, nesreca.id_nesreca, nesreca.x_wgs84, nesreca.x, nesreca.y_wgs84))::numeric <= 388302.29069827584))"
+        ],
+        [
+          "        ->  Hash  (cost=2.12..2.12 rows=1 width=5)"
+        ],
+        [
+          "              Output: upravna_enota.id_upravna_enota"
+        ],
+        [
+          "              ->  Seq Scan on public.upravna_enota  (cost=0.00..2.12 rows=1 width=5)"
+        ],
+        [
+          "                    Output: upravna_enota.id_upravna_enota"
+        ],
+        [
+          "                    Filter: ((upravna_enota.st_prebivalcev <> 31583) AND (upravna_enota.povrsina >= 848) AND ((upravna_enota.ime_upravna_enota)::text = 'Šmarje pri Jelšah'::text))"
+        ],
+        [
+          "JIT:"
+        ],
+        [
+          "  Functions: 15"
+        ],
+        [
+          "  Options: Inlining false, Optimization false, Expressions true, Deforming true"
+        ]
+      ],
+      "timeout": false,
+      "sql": "SELECT COUNT(*) as agg_0 FROM \"nesreca\" JOIN \"upravna_enota\" ON \"nesreca\".\"upravna_enota\" = \"upravna_enota\".\"id_upravna_enota\"  WHERE func_5(\"nesreca\".\"tip_nesreca\",\"nesreca\".\"stanje_povrsina_vozisce\",\"nesreca\".\"stanje_vozisce\",\"nesreca\".\"upravna_enota\",\"nesreca\".\"id_nesreca\",\"nesreca\".\"x_wgs84\",\"nesreca\".\"x\",\"nesreca\".\"y_wgs84\") <= 388302.29069827584 AND \"upravna_enota\".\"st_prebivalcev\" != 31583 AND \"upravna_enota\".\"povrsina\" >= 848 AND \"upravna_enota\".\"ime_upravna_enota\" = 'Šmarje pri Jelšah' AND \"nesreca\".\"vzrok_nesreca\" != 'VO';",
+      "hint": ""
+    }
+  ],
+  "database_stats": {
+    "column_stats": [
+      {
+        "tablename": "nesreca",
+        "attname": "id_nesreca",
+        "null_frac": 0,
+        "avg_width": 7,
+        "n_distinct": -1,
+        "correlation": 0.3487551,
+        "data_type": "character"
+      },
+      {
+        "tablename": "nesreca",
+        "attname": "klas_nesreca",
+        "null_frac": 0,
+        "avg_width": 2,
+        "n_distinct": 6,
+        "correlation": 0.66179204,
+        "data_type": "character"
+      },
+      {
+        "tablename": "nesreca",
+        "attname": "upravna_enota",
+        "null_frac": 0,
+        "avg_width": 5,
+        "n_distinct": 59,
+        "correlation": 0.070769966,
+        "data_type": "character"
+      },
+      {
+        "tablename": "nesreca",
+        "attname": "cas_nesreca",
+        "null_frac": 0,
+        "avg_width": 20,
+        "n_distinct": -0.2729672,
+        "correlation": 0.99774414,
+        "data_type": "character varying"
+      },
+      {
+        "tablename": "nesreca",
+        "attname": "naselje_ali_izven",
+        "null_frac": 0,
+        "avg_width": 2,
+        "n_distinct": 2,
+        "correlation": 0.5161715,
+        "data_type": "character"
+      },
+      {
+        "tablename": "nesreca",
+        "attname": "oznaka_cesta_ali_naselje",
+        "null_frac": 0,
+        "avg_width": 6,
+        "n_distinct": 3037,
+        "correlation": 0.07168967,
+        "data_type": "character"
+      },
+      {
+        "tablename": "nesreca",
+        "attname": "tekst_cesta_ali_naselje",
+        "null_frac": 0,
+        "avg_width": 15,
+        "n_distinct": 3283,
+        "correlation": 0.0013774409,
+        "data_type": "character varying"
+      },
+      {
+        "tablename": "nesreca",
+        "attname": "oznaka_odsek_ali_ulica",
+        "null_frac": 0,
+        "avg_width": 6,
+        "n_distinct": 1804,
+        "correlation": 0.030606387,
+        "data_type": "character"
+      },
+      {
+        "tablename": "nesreca",
+        "attname": "tekst_odsek_ali_ulica",
+        "null_frac": 0,
+        "avg_width": 15,
+        "n_distinct": 3506,
+        "correlation": 0.014551918,
+        "data_type": "character varying"
+      },
+      {
+        "tablename": "nesreca",
+        "attname": "opis_prizorisce",
+        "null_frac": 0,
+        "avg_width": 2,
+        "n_distinct": 9,
+        "correlation": 0.6199301,
+        "data_type": "character"
+      },
+      {
+        "tablename": "nesreca",
+        "attname": "vzrok_nesreca",
+        "null_frac": 0,
+        "avg_width": 3,
+        "n_distinct": 11,
+        "correlation": 0.22062247,
+        "data_type": "character"
+      },
+      {
+        "tablename": "nesreca",
+        "attname": "tip_nesreca",
+        "null_frac": 0,
+        "avg_width": 3,
+        "n_distinct": 10,
+        "correlation": 0.19261988,
+        "data_type": "character"
+      },
+      {
+        "tablename": "nesreca",
+        "attname": "vreme_nesreca",
+        "null_frac": 0,
+        "avg_width": 2,
+        "n_distinct": 8,
+        "correlation": 0.38823622,
+        "data_type": "character"
+      },
+      {
+        "tablename": "nesreca",
+        "attname": "stanje_promet",
+        "null_frac": 0,
+        "avg_width": 2,
+        "n_distinct": 5,
+        "correlation": 0.36614132,
+        "data_type": "character"
+      },
+      {
+        "tablename": "nesreca",
+        "attname": "stanje_vozisce",
+        "null_frac": 0,
+        "avg_width": 3,
+        "n_distinct": 9,
+        "correlation": 0.54416114,
+        "data_type": "character"
+      },
+      {
+        "tablename": "nesreca",
+        "attname": "stanje_povrsina_vozisce",
+        "null_frac": 0,
+        "avg_width": 3,
+        "n_distinct": 3,
+        "correlation": 0.9373762,
+        "data_type": "character"
+      },
+      {
+        "tablename": "nesreca",
+        "attname": "x",
+        "null_frac": 0,
+        "avg_width": 4,
+        "n_distinct": -0.11305735,
+        "correlation": 0.032041326,
+        "data_type": "integer"
+      },
+      {
+        "tablename": "nesreca",
+        "attname": "y",
+        "null_frac": 0,
+        "avg_width": 4,
+        "n_distinct": 41311,
+        "correlation": -0.006184545,
+        "data_type": "integer"
+      },
+      {
+        "tablename": "nesreca",
+        "attname": "x_wgs84",
+        "null_frac": 0,
+        "avg_width": 8,
+        "n_distinct": -0.1650099,
+        "correlation": 0.031997792,
+        "data_type": "double precision"
+      },
+      {
+        "tablename": "nesreca",
+        "attname": "y_wgs84",
+        "null_frac": 0,
+        "avg_width": 8,
+        "n_distinct": -0.1650099,
+        "correlation": -0.0062795607,
+        "data_type": "double precision"
+      },
+      {
+        "tablename": "nesreca",
+        "attname": "kategorija_cesta",
+        "null_frac": 0,
+        "avg_width": 2,
+        "n_distinct": 14,
+        "correlation": 0.036854383,
+        "data_type": "character"
+      },
+      {
+        "tablename": "nesreca",
+        "attname": "stacionazna_ali_hisna_st",
+        "null_frac": 0.43183333,
+        "avg_width": 3,
+        "n_distinct": 1102,
+        "correlation": 0.0114402,
+        "data_type": "character varying"
+      },
+      {
+        "tablename": "oseba",
+        "attname": "id_nesreca",
+        "null_frac": 0,
+        "avg_width": 7,
+        "n_distinct": -0.5756753,
+        "correlation": 0.3430008,
+        "data_type": "character"
+      },
+      {
+        "tablename": "oseba",
+        "attname": "starost",
+        "null_frac": 0,
+        "avg_width": 4,
+        "n_distinct": 93,
+        "correlation": 0.08265942,
+        "data_type": "integer"
+      },
+      {
+        "tablename": "oseba",
+        "attname": "spol",
+        "null_frac": 0,
+        "avg_width": 2,
+        "n_distinct": 3,
+        "correlation": 0.67863655,
+        "data_type": "character"
+      },
+      {
+        "tablename": "oseba",
+        "attname": "upravna_enota",
+        "null_frac": 0,
+        "avg_width": 5,
+        "n_distinct": 63,
+        "correlation": 0.41310358,
+        "data_type": "character"
+      },
+      {
+        "tablename": "oseba",
+        "attname": "drzavljanstvo",
+        "null_frac": 0,
+        "avg_width": 4,
+        "n_distinct": 50,
+        "correlation": 0.86103094,
+        "data_type": "character"
+      },
+      {
+        "tablename": "oseba",
+        "attname": "vozniski_staz_LL",
+        "null_frac": 0,
+        "avg_width": 4,
+        "n_distinct": 59,
+        "correlation": 0.13089299,
+        "data_type": "integer"
+      },
+      {
+        "tablename": "oseba",
+        "attname": "vozniski_staz_MM",
+        "null_frac": 0.1161,
+        "avg_width": 4,
+        "n_distinct": 12,
+        "correlation": 0.57493436,
+        "data_type": "integer"
+      },
+      {
+        "tablename": "oseba",
+        "attname": "vozniski_staz_d",
+        "null_frac": 0,
+        "avg_width": 2,
+        "n_distinct": 10,
+        "correlation": 0.28969222,
+        "data_type": "character"
+      },
+      {
+        "tablename": "oseba",
+        "attname": "alkotest_d",
+        "null_frac": 0,
+        "avg_width": 2,
+        "n_distinct": 11,
+        "correlation": 0.07274178,
+        "data_type": "character"
+      },
+      {
+        "tablename": "oseba",
+        "attname": "strokovni_pregled_d",
+        "null_frac": 0,
+        "avg_width": 2,
+        "n_distinct": 9,
+        "correlation": 0.14495675,
+        "data_type": "character"
+      },
+      {
+        "tablename": "oseba",
+        "attname": "povzrocitelj_ali_udelezenec",
+        "null_frac": 0,
+        "avg_width": 2,
+        "n_distinct": 2,
+        "correlation": 0.5630533,
+        "data_type": "character"
+      },
+      {
+        "tablename": "oseba",
+        "attname": "poskodba",
+        "null_frac": 0,
+        "avg_width": 2,
+        "n_distinct": 6,
+        "correlation": 0.8253834,
+        "data_type": "character"
+      },
+      {
+        "tablename": "oseba",
+        "attname": "vrsta_udelezenca",
+        "null_frac": 0,
+        "avg_width": 3,
+        "n_distinct": 18,
+        "correlation": 0.72063214,
+        "data_type": "character"
+      },
+      {
+        "tablename": "oseba",
+        "attname": "varnostni_pas_ali_celada",
+        "null_frac": 0,
+        "avg_width": 2,
+        "n_distinct": 5,
+        "correlation": -0.44947523,
+        "data_type": "character"
+      },
+      {
+        "tablename": "oseba",
+        "attname": "alkotest",
+        "null_frac": 0.4099,
+        "avg_width": 3,
+        "n_distinct": 306,
+        "correlation": 0.7098359,
+        "data_type": "numeric"
+      },
+      {
+        "tablename": "oseba",
+        "attname": "strokovni_pregled",
+        "null_frac": 0.4075,
+        "avg_width": 3,
+        "n_distinct": 217,
+        "correlation": 0.9175861,
+        "data_type": "numeric"
+      },
+      {
+        "tablename": "oseba",
+        "attname": "starost_d",
+        "null_frac": 0,
+        "avg_width": 2,
+        "n_distinct": 10,
+        "correlation": 0.2657369,
+        "data_type": "character"
+      },
+      {
+        "tablename": "upravna_enota",
+        "attname": "id_upravna_enota",
+        "null_frac": 0,
+        "avg_width": 5,
+        "n_distinct": -1,
+        "correlation": 1,
+        "data_type": "character"
+      },
+      {
+        "tablename": "upravna_enota",
+        "attname": "ime_upravna_enota",
+        "null_frac": 0,
+        "avg_width": 10,
+        "n_distinct": -1,
+        "correlation": 0.9139652,
+        "data_type": "character varying"
+      },
+      {
+        "tablename": "upravna_enota",
+        "attname": "st_prebivalcev",
+        "null_frac": 0,
+        "avg_width": 4,
+        "n_distinct": -0.875,
+        "correlation": -0.07669414,
+        "data_type": "integer"
+      },
+      {
+        "tablename": "upravna_enota",
+        "attname": "povrsina",
+        "null_frac": 0,
+        "avg_width": 4,
+        "n_distinct": -0.921875,
+        "correlation": -0.16749084,
+        "data_type": "integer"
+      }
+    ],
+    "table_stats": [
+      {
+        "relname": "nesreca",
+        "reltuples": 416072,
+        "relpages": 18129
+      },
+      {
+        "relname": "oseba",
+        "reltuples": 628547,
+        "relpages": 15447
+      },
+      {
+        "relname": "upravna_enota",
+        "reltuples": 64,
+        "relpages": 1
+      },
+      {
+        "relname": "pg_statistic",
+        "reltuples": 453,
+        "relpages": 36
+      },
+      {
+        "relname": "pg_type",
+        "reltuples": 607,
+        "relpages": 15
+      },
+      {
+        "relname": "pg_foreign_table",
+        "reltuples": 0,
+        "relpages": 0
+      },
+      {
+        "relname": "pg_authid",
+        "reltuples": 12,
+        "relpages": 1
+      },
+      {
+        "relname": "pg_statistic_ext_data",
+        "reltuples": 0,
+        "relpages": 0
+      },
+      {
+        "relname": "pg_user_mapping",
+        "reltuples": 0,
+        "relpages": 0
+      },
+      {
+        "relname": "pg_subscription",
+        "reltuples": 0,
+        "relpages": 0
+      },
+      {
+        "relname": "pg_attribute",
+        "reltuples": 3034,
+        "relpages": 56
+      },
+      {
+        "relname": "pg_proc",
+        "reltuples": 3205,
+        "relpages": 148
+      },
+      {
+        "relname": "pg_class",
+        "reltuples": 401,
+        "relpages": 13
+      },
+      {
+        "relname": "pg_attrdef",
+        "reltuples": 9,
+        "relpages": 1
+      },
+      {
+        "relname": "pg_constraint",
+        "reltuples": 109,
+        "relpages": 3
+      },
+      {
+        "relname": "pg_inherits",
+        "reltuples": 0,
+        "relpages": 0
+      },
+      {
+        "relname": "pg_index",
+        "reltuples": 157,
+        "relpages": 4
+      },
+      {
+        "relname": "pg_operator",
+        "reltuples": 804,
+        "relpages": 14
+      },
+      {
+        "relname": "pg_opfamily",
+        "reltuples": 146,
+        "relpages": 2
+      },
+      {
+        "relname": "pg_opclass",
+        "reltuples": 177,
+        "relpages": 3
+      },
+      {
+        "relname": "pg_am",
+        "reltuples": 7,
+        "relpages": 1
+      },
+      {
+        "relname": "pg_amop",
+        "reltuples": 945,
+        "relpages": 7
+      },
+      {
+        "relname": "pg_amproc",
+        "reltuples": 697,
+        "relpages": 5
+      },
+      {
+        "relname": "pg_language",
+        "reltuples": 4,
+        "relpages": 1
+      },
+      {
+        "relname": "pg_largeobject_metadata",
+        "reltuples": 0,
+        "relpages": 0
+      },
+      {
+        "relname": "pg_aggregate",
+        "reltuples": 145,
+        "relpages": 2
+      },
+      {
+        "relname": "pg_statistic_ext",
+        "reltuples": 0,
+        "relpages": 0
+      },
+      {
+        "relname": "pg_rewrite",
+        "reltuples": 139,
+        "relpages": 13
+      },
+      {
+        "relname": "pg_trigger",
+        "reltuples": 0,
+        "relpages": 0
+      },
+      {
+        "relname": "pg_event_trigger",
+        "reltuples": 0,
+        "relpages": 0
+      },
+      {
+        "relname": "pg_description",
+        "reltuples": 5078,
+        "relpages": 44
+      },
+      {
+        "relname": "pg_cast",
+        "reltuples": 230,
+        "relpages": 2
+      },
+      {
+        "relname": "pg_enum",
+        "reltuples": 0,
+        "relpages": 0
+      },
+      {
+        "relname": "pg_namespace",
+        "reltuples": 4,
+        "relpages": 1
+      },
+      {
+        "relname": "pg_conversion",
+        "reltuples": 128,
+        "relpages": 2
+      },
+      {
+        "relname": "pg_depend",
+        "reltuples": 8843,
+        "relpages": 67
+      },
+      {
+        "relname": "pg_database",
+        "reltuples": 10,
+        "relpages": 1
+      },
+      {
+        "relname": "pg_db_role_setting",
+        "reltuples": 0,
+        "relpages": 0
+      },
+      {
+        "relname": "pg_tablespace",
+        "reltuples": 2,
+        "relpages": 1
+      },
+      {
+        "relname": "pg_auth_members",
+        "reltuples": 3,
+        "relpages": 1
+      },
+      {
+        "relname": "pg_shdepend",
+        "reltuples": 12,
+        "relpages": 1
+      },
+      {
+        "relname": "pg_shdescription",
+        "reltuples": 3,
+        "relpages": 1
+      },
+      {
+        "relname": "pg_ts_config",
+        "reltuples": 29,
+        "relpages": 1
+      },
+      {
+        "relname": "pg_ts_config_map",
+        "reltuples": 551,
+        "relpages": 3
+      },
+      {
+        "relname": "pg_ts_dict",
+        "reltuples": 29,
+        "relpages": 1
+      },
+      {
+        "relname": "pg_ts_parser",
+        "reltuples": 1,
+        "relpages": 1
+      },
+      {
+        "relname": "pg_ts_template",
+        "reltuples": 5,
+        "relpages": 1
+      },
+      {
+        "relname": "pg_extension",
+        "reltuples": 1,
+        "relpages": 1
+      },
+      {
+        "relname": "pg_foreign_data_wrapper",
+        "reltuples": 0,
+        "relpages": 0
+      },
+      {
+        "relname": "pg_foreign_server",
+        "reltuples": 0,
+        "relpages": 0
+      },
+      {
+        "relname": "pg_policy",
+        "reltuples": 0,
+        "relpages": 0
+      },
+      {
+        "relname": "pg_replication_origin",
+        "reltuples": 0,
+        "relpages": 0
+      },
+      {
+        "relname": "pg_default_acl",
+        "reltuples": 0,
+        "relpages": 0
+      },
+      {
+        "relname": "pg_init_privs",
+        "reltuples": 199,
+        "relpages": 3
+      },
+      {
+        "relname": "pg_seclabel",
+        "reltuples": 0,
+        "relpages": 0
+      },
+      {
+        "relname": "pg_shseclabel",
+        "reltuples": 0,
+        "relpages": 0
+      },
+      {
+        "relname": "pg_collation",
+        "reltuples": 790,
+        "relpages": 25
+      },
+      {
+        "relname": "pg_partitioned_table",
+        "reltuples": 0,
+        "relpages": 0
+      },
+      {
+        "relname": "pg_range",
+        "reltuples": 6,
+        "relpages": 1
+      },
+      {
+        "relname": "pg_transform",
+        "reltuples": 0,
+        "relpages": 0
+      },
+      {
+        "relname": "pg_sequence",
+        "reltuples": 0,
+        "relpages": 0
+      },
+      {
+        "relname": "pg_publication",
+        "reltuples": 0,
+        "relpages": 0
+      },
+      {
+        "relname": "pg_publication_rel",
+        "reltuples": 0,
+        "relpages": 0
+      },
+      {
+        "relname": "pg_subscription_rel",
+        "reltuples": 0,
+        "relpages": 0
+      },
+      {
+        "relname": "pg_largeobject",
+        "reltuples": 0,
+        "relpages": 0
+      },
+      {
+        "relname": "sql_parts",
+        "reltuples": 10,
+        "relpages": 1
+      },
+      {
+        "relname": "sql_implementation_info",
+        "reltuples": 12,
+        "relpages": 1
+      },
+      {
+        "relname": "sql_features",
+        "reltuples": 713,
+        "relpages": 8
+      },
+      {
+        "relname": "sql_sizing",
+        "reltuples": 23,
+        "relpages": 1
+      }
+    ]
+  },
+  "run_kwargs": {
+    "hardware": "local"
+  },
+  "total_time_secs": 111.33944403499481
+}
