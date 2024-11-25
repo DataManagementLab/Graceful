@@ -1,6 +1,6 @@
 # Graceful
 
-Sourcecode of our ICE '25 paper "GRACEFUL: A Learned Plan Advisor For UDFs"
+Sourcecode of our ICE '25 paper "GRACEFUL: A Learned Cost Estimator For UDFs"
 
 <p align="center">
   <img src="graphics/graceful.jpg" width="50%">
