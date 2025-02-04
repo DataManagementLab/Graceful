@@ -175,6 +175,9 @@ if __name__ == '__main__':
     parser.add_argument('--min_num_comp_nodes', type=int, default=argparse.SUPPRESS)
     parser.add_argument('--max_num_comp_nodes', type=int, default=argparse.SUPPRESS)
 
+    # flat vector udf-cost model (hybrid baseline)
+    parser.add_argument('--flat_vector_model_path', type=str, default=argparse.SUPPRESS)
+
     args = parser.parse_args()
 
     if args.register_at_wandb or args.wandb_run_sweep:
@@ -274,6 +277,8 @@ if __name__ == '__main__':
         args_config['min_num_comp_nodes'] = args.min_num_comp_nodes
     if hasattr(args, 'max_num_comp_nodes'):
         args_config['max_num_comp_nodes'] = args.max_num_comp_nodes
+    if hasattr(args,'flat_vector_model_path'):
+        args_config['flat_vector_model_path'] = args.flat_vector_model_path
 
     train_fn = functools.partial(run_train,
                                  orig_args_config=args_config,

@@ -28,6 +28,8 @@ config_keywords = {
     'loopedge': 'model',  # add edge between loop and loopend
     'lazy': 'model',  # assume lazy evaluation for cardinality estimation
     'gradntemb': 'model',  # allow gradients on embeddings of node-type encoder
+    'sepsqludfgr':'model', # separate sql and udf graph: sql_cost + udf_cost = total_cost (both with GRACEFUL, but separate)
+    'flatudf':'model' # hybrid baseline: flat vector for udf cost estimation, GRACEFUL for query cost estimation
 }
 
 
@@ -128,7 +130,9 @@ def get_config(hyperparams: Dict[str, Any], wl_base_path: str, assemble_filename
             max_num_math_calls=None,
             min_num_comp_nodes=None,
             max_num_comp_nodes=None,
-        )
+        ),
+        separate_sql_udf_graphs=False,
+        flat_vector_udf_est=False
     )
 
     """
@@ -332,6 +336,8 @@ def get_config(hyperparams: Dict[str, Any], wl_base_path: str, assemble_filename
         max_num_comp_nodes = hyperparams.pop('max_num_comp_nodes')
         config['filter_plans']['max_num_comp_nodes'] = max_num_comp_nodes
         model_name += f'_maxcomp{max_num_comp_nodes}'
+    if 'flat_vector_model_path' in hyperparams:
+        config['flat_vector_model_path'] = hyperparams.pop('flat_vector_model_path')
 
     base_featurization = None
     # extract base featurization from model config
@@ -376,6 +382,10 @@ def get_config(hyperparams: Dict[str, Any], wl_base_path: str, assemble_filename
                     config['card_est_assume_lazy_eval'] = True
                 elif keyword == 'gradntemb':
                     node_type_kwargs['allow_gradients_on_embeddings'] = True
+                elif keyword == 'sepsqludfgr':
+                    config['separate_sql_udf_graphs']=True
+                elif keyword == 'flatudf':
+                    config['flat_vector_udf_est']=True
                 else:
                     raise ValueError(f"Unknown keyword {keyword}")
         elif keyword.startswith('graphdim'):

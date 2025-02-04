@@ -39,7 +39,7 @@ def train_epoch(epoch_stats, train_loader, model, optimizer, max_epoch_tuples, c
         if max_epoch_tuples is not None and batch_idx * train_loader.batch_size > max_epoch_tuples:
             break
 
-        input_model, label, stats, sample_idxs = custom_batch_to(batch, model.device, model.label_norm)
+        input_model, label, stats, sample_idxs, udf_graph_bitmask = custom_batch_to(batch, model.device, model.label_norm)
 
         # print(input_model[0])
         # print(input_model[1])
@@ -130,7 +130,17 @@ def train_epoch(epoch_stats, train_loader, model, optimizer, max_epoch_tuples, c
 
 
 def run_inference(data_loader: torch.utils.data.DataLoader, model: torch.nn.Module, max_epoch_tuples: int,
-                  custom_batch_to=batch_to):
+                  separate_sql_udf_graphs: bool, flat_vector_udf_est:bool, custom_batch_to=batch_to, pt_profile: bool = False):
+    if pt_profile:
+        # setup pytorch profiler with tensorboard
+        prof = torch.profiler.profile(
+            schedule=torch.profiler.schedule(wait=1, warmup=1, active=1, repeat=1),
+            with_stack=True, record_shapes=True)
+
+        prof.start()
+    else:
+        prof = None
+
     model.eval()
     with torch.autograd.no_grad():
         val_loss = torch.Tensor([0])
@@ -155,6 +165,8 @@ def run_inference(data_loader: torch.utils.data.DataLoader, model: torch.nn.Modu
         udf_filter_num_logicals = []
         udf_filter_num_literals = []
 
+        inference_latencies_ms = []
+
         # evaluate test set using model
         test_start_t = time.perf_counter()
         val_num_tuples = 0
@@ -164,10 +176,19 @@ def run_inference(data_loader: torch.utils.data.DataLoader, model: torch.nn.Modu
 
             val_num_tuples += data_loader.batch_size
 
-            input_model, label, stats, sample_idxs_batch = custom_batch_to(batch, model.device, model.label_norm)
-            sample_idxs += sample_idxs_batch
+            input_model, label, stats, sample_idxs_batch, udf_graph_bitmask = custom_batch_to(batch, model.device,
+                                                                                              model.label_norm)
+            assert len(sample_idxs_batch) > 0
+            if separate_sql_udf_graphs or flat_vector_udf_est:
+                assert len(udf_graph_bitmask) > 0
 
+            # run inference and measure latency
+            start_t = time.time()
             out = model(input_model)
+            end_t = time.time()
+            if prof is not None:
+                prof.step()
+            inference_latencies_ms.append((end_t - start_t) * 1000)
 
             graph_repr = None
             udf_repr = None
@@ -184,11 +205,74 @@ def run_inference(data_loader: torch.utils.data.DataLoader, model: torch.nn.Modu
             else:
                 output, feat_dict = out
 
-            if graph_repr is not None:
-                graph_reprs.append(graph_repr.cpu().numpy())
-            if udf_repr is not None:
-                udf_reprs.append(udf_repr.cpu().numpy())
+            assert output.shape[0] == label.shape[0], f'{output.shape} vs {label.shape}'
 
+            # perform the udf_cost + sql_cost operation if activated
+            if separate_sql_udf_graphs or flat_vector_udf_est:
+                new_output = []
+                new_labels = []
+                udf_nr = 0
+
+                if flat_vector_udf_est:
+                    flat_vector_preds = stats['flat_vector_predictions']
+
+                    # convert to s, cap at 0
+                    flat_vector_preds = [max(0,x)/1000 for x in flat_vector_preds]
+
+
+                    # apply normalization
+                    if model.label_norm is not None and len(flat_vector_preds)>0:
+                        flat_vector_preds =[[x] for x in flat_vector_preds]
+                        flat_vector_preds = model.label_norm.transform(flat_vector_preds)
+
+                # print(f'udf preds: {stats["flat_vector_predictions"][:10]}, graph preds: {output.cpu().numpy()[:10]}, labels: {label.cpu().numpy()[:10]}', flush=True)
+
+                for out, l, is_udf_graph, s_ids in zip(output.cpu().numpy(), label.cpu().numpy(), udf_graph_bitmask,
+                                                       sample_idxs_batch):
+                    if is_udf_graph:
+                        # add to previous value
+                        if flat_vector_udf_est:
+                            # use flat vector prediction
+                            flat_vector_pred = flat_vector_preds[udf_nr] # cap negative values and convert to s
+                            new_output[-1] += flat_vector_pred
+                            udf_nr += 1
+                        else:
+                            # use graph prediction
+                            new_output[-1] += out
+                    else:
+                        # add to new value
+                        new_output.append(out)
+                        new_labels.append(l)
+
+                        if graph_repr is not None:
+                            graph_reprs.append(graph_repr.cpu().numpy())
+                        if udf_repr is not None:
+                            udf_reprs.append(udf_repr.cpu().numpy())
+
+                new_output = torch.tensor(new_output)
+                new_labels = torch.tensor(new_labels)
+
+                # reshape to old shape
+                new_output = new_output.reshape(-1, 1)
+                new_labels = new_labels.reshape(-1, 1)
+
+                output = new_output
+                label = new_labels
+
+                # prune stats
+                assert len(udf_graph_bitmask) > 0
+                sample_idxs_batch = [s_ids for s_ids, udf_graph in zip(sample_idxs_batch, udf_graph_bitmask) if
+                                     not udf_graph]
+                for key, value in stats.items():
+                    stats[key] = [value[i] for i in range(len(value)) if not udf_graph_bitmask[i]]
+
+            else:
+                if graph_repr is not None:
+                    graph_reprs.append(graph_repr.cpu().numpy())
+                if udf_repr is not None:
+                    udf_reprs.append(udf_repr.cpu().numpy())
+
+            sample_idxs += sample_idxs_batch
             # sum up mean batch losses
             val_loss += model.loss_fxn(output, label).cpu()
 
@@ -199,6 +283,8 @@ def run_inference(data_loader: torch.utils.data.DataLoader, model: torch.nn.Modu
                 curr_pred = model.label_norm.inverse_transform(curr_pred)
                 curr_label = model.label_norm.inverse_transform(curr_label.reshape(-1, 1))
                 curr_label = curr_label.reshape(-1)
+
+            assert len(sample_idxs_batch) == len(curr_pred), f'{len(sample_idxs_batch)} vs {len(curr_pred)}'
 
             preds.append(curr_pred.reshape(-1))
             labels.append(curr_label.reshape(-1))
@@ -261,16 +347,25 @@ def run_inference(data_loader: torch.utils.data.DataLoader, model: torch.nn.Modu
         'udf_filter_num_literals': udf_filter_num_literals
     }
 
-    return labels, preds, graph_reprs, udf_reprs, sample_idxs, val_num_tuples, test_start_t, val_loss, stats
+    if pt_profile:
+        print(f'Stop profiler...')
+        prof.stop()
+        prof.export_chrome_trace('trace.json')
+        print(f'exported trace')
+
+    return labels, preds, graph_reprs, udf_reprs, sample_idxs, val_num_tuples, test_start_t, val_loss, stats, inference_latencies_ms
 
 
 def validate_model(data_loader, model, validate_stats: Dict, epoch=0, metrics=None, max_epoch_tuples=None,
                    verbose=False, log_all_queries=False, extended_evaluation: bool = False,
-                   prefix: str = None, is_test_loader: bool = False, log_to_wandb: bool = True) -> \
+                   prefix: str = None, is_test_loader: bool = False, log_to_wandb: bool = True,
+                   separate_sql_udf_graphs: bool = False,
+                   flat_vector_udf_est: bool = False) -> \
         Tuple[bool, Dict, np.ndarray, np.ndarray, np.ndarray, np.ndarray, Dict]:
-    labels, preds, graph_reprs, udf_reprs, sample_idxs, val_num_tuples, test_start_t, val_loss, stats = run_inference(
-        data_loader, model,
-        max_epoch_tuples)
+    # run inference
+    labels, preds, graph_reprs, udf_reprs, sample_idxs, val_num_tuples, test_start_t, val_loss, stats, inference_latencies_ms = run_inference(
+        data_loader, model, separate_sql_udf_graphs=separate_sql_udf_graphs, max_epoch_tuples=max_epoch_tuples,
+        flat_vector_udf_est=flat_vector_udf_est)
 
     validate_stats[f'{prefix}_time'] = time.perf_counter() - test_start_t
     validate_stats[f'{prefix}_num_tuples'] = val_num_tuples
@@ -290,7 +385,11 @@ def validate_model(data_loader, model, validate_stats: Dict, epoch=0, metrics=No
             'pred': preds,
             'sample_idxs': sample_idxs,
         }
+        assert len(labels) == len(preds), f'{len(labels)} vs {len(preds)}'
+        assert len(labels) == len(sample_idxs), f'{len(labels)} vs {len(sample_idxs)}'
+
         for key, value in stats.items():
+            assert len(labels) == len(value), f'{key}: {len(labels)} vs {len(value)}'
             data_dict[key] = value
 
         table = pandas.DataFrame(data_dict)
@@ -425,7 +524,9 @@ def train_model(workload_runs,
                 valtest: bool = True, w_loop_end_node: bool = False,
                 add_loop_loopend_edge: bool = False, card_est_assume_lazy_eval: bool = True,
                 include_no_udf_data: bool = False, test_with_count_edges_msg_aggr: bool = False,
-                min_runtime_ms: int = 100, skip_udf: bool = False, filter_plans: Dict[str, int] = None):
+                min_runtime_ms: int = 100, skip_udf: bool = False, filter_plans: Dict[str, int] = None,
+                separate_sql_udf_graphs: bool = False, flat_vector_udf_est: bool = False,
+                flat_vector_model_path: str = None):
     if model_kwargs is None:
         model_kwargs = dict()
 
@@ -453,7 +554,9 @@ def train_model(workload_runs,
                           card_type_in_udf=card_type, card_type_above_udf=card_type, card_type_below_udf=card_type,
                           plans_have_no_udf=plans_have_no_udf,
                           stratification_prioritize_loops=stratification_prioritize_loops, skip_udf=skip_udf,
-                          filter_plans=filter_plans)
+                          filter_plans=filter_plans, separate_sql_udf_graphs=separate_sql_udf_graphs,
+                          annotate_flat_vector_udf_preds=flat_vector_udf_est,
+                          flat_vector_model_path=flat_vector_model_path)
 
     assert len(test_loaders) > 0, "No test loaders found"
 
@@ -545,7 +648,8 @@ def train_model(workload_runs,
                            epochs=epochs, csv_stats=csv_stats, target_dir=target_dir, filename_model=filename_model,
                            register_at_wandb=register_at_wandb,
                            additional_wandb_stats=additional_wandb_stats, test_loader=test_loaders[0], valtest=valtest,
-                           test_with_count_edges_msg_aggr=test_with_count_edges_msg_aggr)
+                           test_with_count_edges_msg_aggr=test_with_count_edges_msg_aggr,
+                           separate_sql_udf_graphs=separate_sql_udf_graphs, flat_vector_udf_est=flat_vector_udf_est)
 
             epoch += 1
 
@@ -571,7 +675,8 @@ def train_model(workload_runs,
                            filename_model=filename_model,
                            register_at_wandb=register_at_wandb,
                            additional_wandb_stats=additional_wandb_stats, test_loader=test_loaders[0], valtest=valtest,
-                           test_with_count_edges_msg_aggr=test_with_count_edges_msg_aggr)
+                           test_with_count_edges_msg_aggr=test_with_count_edges_msg_aggr,
+                           separate_sql_udf_graphs=separate_sql_udf_graphs, flat_vector_udf_est=flat_vector_udf_est)
             epoch += 1
 
             if ft_lr is not None and epoch > (epoch_offset + ft_epochs_udf_only) * 0.75 and optimizer.param_groups[0][
@@ -606,10 +711,12 @@ def train_model(workload_runs,
 
             if apply_pca_evaluation:
                 print(f'Running inference for train and val set to perform PCA analysis')
-                train_labels, train_preds, train_graph_reprs, train_udf_reprs, _, _, _, _, train_query_stats = run_inference(
-                    train_loader, model, 5000)
-                val_labels, val_preds, val_graph_reprs, val_udf_reprs, _, _, _, _, val_query_stats = run_inference(
-                    val_loader, model, 5000)
+                train_labels, train_preds, train_graph_reprs, train_udf_reprs, _, _, _, _, train_query_stats, inference_latencies_ms = run_inference(
+                    train_loader, model, max_epoch_tuples=5000, separate_sql_udf_graphs=separate_sql_udf_graphs,
+                    flat_vector_udf_est=flat_vector_udf_est)
+                val_labels, val_preds, val_graph_reprs, val_udf_reprs, _, _, _, _, val_query_stats, inference_latencies_ms = run_inference(
+                    val_loader, model, max_epoch_tuples=5000, separate_sql_udf_graphs=separate_sql_udf_graphs,
+                    flat_vector_udf_est=flat_vector_udf_est)
 
             else:
                 train_labels, train_preds, val_labels, val_preds = None, None, None, None
@@ -653,7 +760,10 @@ def train_model(workload_runs,
                                       card_type_in_udf=card, card_type_above_udf=card,
                                       card_type_below_udf=card, skip_udf=skip_udf,
                                       stratification_prioritize_loops=stratification_prioritize_loops,
-                                      plans_have_no_udf=plans_have_no_udf, filter_plans=filter_plans)
+                                      plans_have_no_udf=plans_have_no_udf, filter_plans=filter_plans,
+                                      separate_sql_udf_graphs=separate_sql_udf_graphs,
+                                      annotate_flat_vector_udf_preds=flat_vector_udf_est,
+                                      flat_vector_model_path=flat_vector_model_path)
 
                 for test_loader, path in zip(test_loaders, test_loader_names):
 
@@ -674,7 +784,10 @@ def train_model(workload_runs,
                             log_all_queries=True,
                             extended_evaluation=True,
                             prefix=f'test_{test_workload_name}',
-                            is_test_loader=True, log_to_wandb=register_at_wandb)
+                            is_test_loader=True, log_to_wandb=register_at_wandb,
+                            separate_sql_udf_graphs=separate_sql_udf_graphs,
+                            flat_vector_udf_est=flat_vector_udf_est
+                        )
                     except KeyError as e:
                         print(e)
                         print(f"Error with test loader: {test_workload_name}", flush=True)
@@ -751,9 +864,10 @@ def train_epoch_fn(epoch: int, train_loader: torch.utils.data.DataLoader,
                    optimizer: torch.optim.Optimizer, max_epoch_tuples: int, prof: torch.profiler.profile,
                    apply_gradient_norm: bool, metrics: List, lr_scheduler: Any, epochs_wo_improvement: int,
                    early_stopping_patience: int, epochs: int, csv_stats: List, target_dir: str, filename_model: str,
-                   register_at_wandb: bool, additional_wandb_stats: Dict = None,
+                   register_at_wandb: bool, separate_sql_udf_graphs: bool, flat_vector_udf_est: bool,
+                   additional_wandb_stats: Dict = None,
                    test_loader: torch.utils.data.DataLoader = None, apply_pca_evaluation: bool = True,
-                   valtest: bool = True, test_with_count_edges_msg_aggr: bool = False):
+                   valtest: bool = True, test_with_count_edges_msg_aggr: bool = False, ):
     print(f"Epoch {epoch}")
     epoch_stats = {
         'epoch': epoch,
@@ -773,12 +887,13 @@ def train_epoch_fn(epoch: int, train_loader: torch.utils.data.DataLoader,
         metrics=metrics,
         max_epoch_tuples=max_epoch_tuples,
         prefix='val',
-        log_to_wandb=register_at_wandb)
+        log_to_wandb=register_at_wandb, separate_sql_udf_graphs=separate_sql_udf_graphs, flat_vector_udf_est=flat_vector_udf_est)
     if test_loader is not None and valtest:
         _, valtest_wandb_plots, valtest_graph_reprs, valtest_udf_reprs, valtest_labels, valtest_preds, valtest_query_stats = validate_model(
             test_loader, model, epoch=epoch, validate_stats=epoch_stats,
             metrics=metrics, max_epoch_tuples=max_epoch_tuples,
-            prefix='valtest', is_test_loader=True, log_to_wandb=register_at_wandb)
+            prefix='valtest', is_test_loader=True, log_to_wandb=register_at_wandb,
+            separate_sql_udf_graphs=separate_sql_udf_graphs, flat_vector_udf_est=flat_vector_udf_est)
         wandb_plots.update(valtest_wandb_plots)
     else:
         valtest_graph_reprs, valtest_udf_reprs, valtest_labels, valtest_preds, valtest_query_stats = None, None, None, None, None

@@ -34,6 +34,8 @@ tqdm==4.64.1
 wandb==0.16.1
 scp
 sqlparse==0.5.1
+xgboost
+orjson
 
 # deepdb requirements
 git+https://github.com/SPFlow/SPFlow.git

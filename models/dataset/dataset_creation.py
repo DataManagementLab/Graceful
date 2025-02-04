@@ -264,7 +264,7 @@ def balance_plans(plans: List, max_runtime: int, hint: str, print_distr_stats: b
 
     random.Random(0).shuffle(plans)
 
-    print(f'Balancing of dataset by runtimes: {orig_num_plans} -> {len(plans)} ({hint})')
+    print(f'Balancing of dataset by runtimes: {orig_num_plans} -> {len(plans)} ({hint})', flush=True)
     if print_distr_stats:
         tabulate_data = zip(bin_edges, no_plans_per_bin, no_plans_per_bin_balanced, loop_perc, branch_perc)
         head = ['Bin edges', 'No plans per bin', 'No plans per bin (balanced)', 'Avg. Num Loops', 'Avg. Num Branches']
@@ -502,7 +502,8 @@ def create_dataloader(workload_run_paths, test_workload_run_paths: Optional[List
                       card_est_assume_lazy_eval: bool = True, min_runtime_ms: int = 100,
                       est_card_udf_sel: Optional[int] = None, create_dataset_fn_test_artefacts=None,
                       feature_statistics: dict = None, plans_have_no_udf: bool = False, skip_udf: bool = False,
-                      filter_plans: Dict[str, int] = None,
+                      filter_plans: Dict[str, int] = None, separate_sql_udf_graphs: bool = False,
+                      annotate_flat_vector_udf_preds: bool = False, flat_vector_model_path: str = None,
                       ) -> [Any, Dict, DataLoader, DataLoader, List[DataLoader], List[str], List[DataLoader]]:
     """
     Creates dataloaders that batches physical plans to train the model in a distributed fashion.
@@ -568,7 +569,8 @@ def create_dataloader(workload_run_paths, test_workload_run_paths: Optional[List
                                          card_type_below_udf=rewritten_card_type_below_udf,
                                          card_type_above_udf=rewritten_card_type_above_udf,
                                          card_type_in_udf=card_type_in_udf, plans_have_no_udf=plans_have_no_udf,
-                                         skip_udf=skip_udf)
+                                         skip_udf=skip_udf, separate_sql_udf_graphs=separate_sql_udf_graphs,
+                                         annotate_flat_vector_udf_preds=annotate_flat_vector_udf_preds, flat_vector_model_path=flat_vector_model_path)
     dataloader_args = dict(batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, collate_fn=train_collate_fn,
                            pin_memory=pin_memory)
     if train_dataset is None or len(train_dataset) == 0:
@@ -641,7 +643,10 @@ def create_dataloader(workload_run_paths, test_workload_run_paths: Optional[List
                                                 card_type_above_udf=rewritten_card_type_above_udf,
                                                 card_type_in_udf=card_type_in_udf,
                                                 card_type_below_udf=rewritten_card_type_below_udf,
-                                                plans_have_no_udf=plans_have_no_udf, skip_udf=skip_udf)
+                                                plans_have_no_udf=plans_have_no_udf, skip_udf=skip_udf,
+                                                separate_sql_udf_graphs=separate_sql_udf_graphs,
+                                                flat_vector_model_path=flat_vector_model_path,
+                                                annotate_flat_vector_udf_preds=annotate_flat_vector_udf_preds)
 
             # previously shuffle=False but this resulted in bugs
             dataloader_args.update(collate_fn=test_collate_fn)

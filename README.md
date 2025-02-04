@@ -87,7 +87,7 @@ python evaluate_pull_up_predictor.py --pullup_plans_path ../Graceful_data/worklo
 python evaluate_pull_up_predictor.py --pullup_plans_path ../Graceful_data/workload_runs/duckdb_pullup/parsed_plans/tpc_h/workload.json --pushdown_plans_path ../Graceful_data/workload_runs/duckdb_pushdown/parsed_plans/tpc_h/workload.json --model_dir ../Graceful_data/graceful_artifacts/leave_out_tpc_h --model_name act_minrt50ms_complex_dd_wpullupdata_wnoUDFdata_ddactfonudf_liboh_gradnorm_mldupl_loopend_loopedge_tpc_h_stratDBs_ep60_maxr30_20240501_093049_070 --device cuda:0 --statistics_file ../Graceful_data/workload_runs/duckdb_pushdown/parsed_plans/statistics_workload_combined.json --model_config ddactfonudf_liboh_gradnorm_mldupl_loopend_loopedge --dataset genome
 ```
 
-## Retraining Cost-Est Models
+## Retraining UDF Cost Estimator Models
 
 For training the model please generate the experiment commands using the `gen_train_commands.py` helper file. This
 includes the model configurations for the ablation study and the leave-one-out experiments.
@@ -164,7 +164,7 @@ The parameter ```--exact_tree``` indicates whether we want to create UDFs with a
 components (COMP, LOOP, IF) (```True```) or with tree structure that might be a subset of the the set (COMP, LOOP,
 IF) (```False```)
 
-#### 7.2 For previously create SPAJ queries
+#### 7.2 For previously created SPAJ queries
 
 If we want to create UDFs for already created **SPJA queries**, run the following command:
 ```python3 generate_udf_wl.py --metafile_name udf_stats.json --exp_name test_exp --no_funcs 1000 --exact_tree {True|False}```
@@ -220,4 +220,19 @@ Train and evaulate the flat vector baseline:
 
 ```
 python3 flat_vector_baseline.py --exp_dir ../Graceful_data/workload_runs/duckdb_scan_only/ --test_against imdb --model_type xgboost
+```
+
+# Hybrid Baseline
+The hybrid baseline combines Flatvector for estimating the UDF costs with the query operator related parts of GRACEFUL. Both costs are summed up to form the total query cost.
+
+This behaviour is activated with the `flatudf` flag in the `model_config` string. This requires a pre-trained FlatVector model (see FlatVector baseline above) as well as a GRACEFUL model.
+```
+python3 train.py --data_keyword complex_dd \
+--model_config ddactfonudf_liboh_gradnorm_mldupl_loopend_loopedge_flatudf \
+--wl_base_path /Graceful_data/workload_runs/ --out_base_path /out/models \ 
+--train_on_test True --stratify_per_database_by_runtimes True \
+--pretrained_model_artifact_dir /Graceful_data/models/act_minrt50ms_complex_dd_wpullupdata_wnoUDFdata_ddactfonudf_liboh_gradnorm_mldupl_loopend_loopedge_baseball_stratDBs_ep60_maxr30 \
+--pretrained_model_filename act_minrt50ms_complex_dd_wpullupdata_wnoUDFdata_ddactfonudf_liboh_gradnorm_mldupl_loopend_loopedge_baseball_stratDBs_ep60_maxr30_20240503_101832_095 \
+--include_no_udf_data --include_pullup_data --include_pushdown_data --min_runtime_ms 50 --card_type act \
+--flat_vector_model_path /flat_vector_baseline/baseball_xgboost_act.model
 ```

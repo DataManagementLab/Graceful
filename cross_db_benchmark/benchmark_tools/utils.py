@@ -2,7 +2,7 @@ import json
 import os
 from types import SimpleNamespace
 from typing import Tuple
-
+import orjson
 
 def load_schema_json(dataset):
     schema_path = os.path.join('cross_db_benchmark/datasets/', dataset, 'schema.json')
@@ -81,7 +81,8 @@ def load_json(path, namespace=True):
         if namespace:
             json_obj = json.load(json_file, object_hook=lambda d: SimpleNamespace(**d))
         else:
-            json_obj = json.load(json_file)
+            json_obj = orjson.loads(json_file.read())
+            # json_obj = json.load(json_file)
     return json_obj
 
 

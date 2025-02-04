@@ -9,7 +9,6 @@ import wandb
 from cross_db_benchmark.benchmark_tools.database import DatabaseSystem
 from cross_db_benchmark.benchmark_tools.utils import load_json
 from evaluate_pull_up_predictor import log_q_errors, convert_dict_of_lists_to_dataframe
-from hyperparams_utils import get_config
 from models.dataset.dataset_creation import read_workload_runs, create_datasets, create_dataloader, \
     derive_label_normalizer
 from models.training.checkpoint import load_checkpoint
@@ -17,6 +16,7 @@ from models.training.metrics import RMSE, QError, MAPE
 from models.training.train import run_inference
 from models.training.utils import find_early_stopping_metric
 from models.zero_shot_models.specific_models.model import zero_shot_models
+from utils.hyperparams_utils import get_config
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -28,6 +28,7 @@ if __name__ == '__main__':
     parser.add_argument('--statistics_file', required=True, default=None)
     parser.add_argument('--data_keyword', default='complex_dd')
     parser.add_argument('--dataset', required=True, default=None)
+    parser.add_argument('--profile', default=False, action='store_true')
 
     ###
     # Begin Model Args
@@ -103,7 +104,7 @@ if __name__ == '__main__':
                                             database=database,
                                             val_ratio=0.15, finetune_ratio=0.0, batch_size=config['batch_size'],
                                             shuffle=False,
-                                            num_workers=4,
+                                            num_workers=8,
                                             pin_memory=False, limit_queries=False,
                                             limit_queries_affected_wl=None,
                                             loss_class_name=config['final_mlp_kwargs']['loss_class_name'],
@@ -120,7 +121,10 @@ if __name__ == '__main__':
                                             add_loop_loopend_edge=config['add_loop_loopend_edge'],
                                             card_est_assume_lazy_eval=config['card_est_assume_lazy_eval'],
                                             min_runtime_ms=config['min_runtime_ms'],
-                                            create_dataset_fn_test_artefacts=create_dataset_fn_test_artefacts)
+                                            create_dataset_fn_test_artefacts=create_dataset_fn_test_artefacts,
+                                            separate_sql_udf_graphs=config['separate_sql_udf_graphs'],
+                                            annotate_flat_vector_udf_preds= config['flat_vector_udf_est'],
+                                            flat_vector_model_path=config['flat_vector_model_path'],)
 
     feature_statistics = load_json(statistics_file, namespace=False)
     # add stats for artificial features (additional flags / ...)
@@ -187,9 +191,9 @@ if __name__ == '__main__':
             return None, None
 
         # run inference for pull-up plans
-        rcv_labels, preds, graph_reprs, udf_reprs, sample_idxs, val_num_tuples, test_start_t, val_loss, stats = run_inference(
+        rcv_labels, preds, graph_reprs, udf_reprs, sample_idxs, val_num_tuples, test_start_t, val_loss, stats, avg_inference_latency_per_batch = run_inference(
             data_loaders[0], model,
-            100000)
+            100000, pt_profile=args.profile, separate_sql_udf_graphs=config['separate_sql_udf_graphs'], flat_vector_udf_est=config['flat_vector_udf_est'],)
 
         if expected_labels is not None:
             assert np.all(
@@ -201,10 +205,10 @@ if __name__ == '__main__':
 
         preds_dict[card_id][card_est_udf_sel] = preds
 
-        return rcv_labels
+        return rcv_labels, avg_inference_latency_per_batch
 
 
-    labels = run_inference_fn('act', 'act', 'act', None)
+    labels, avg_inference_latency_per_batch = run_inference_fn('act', 'act', 'act', None)
     run_inference_fn('dd', 'dd', 'dd', None, expected_labels=labels)
 
     log_dict = {
@@ -212,6 +216,7 @@ if __name__ == '__main__':
             dataframe=convert_dict_of_lists_to_dataframe(
                 {'labels': labels, 'sql': sql_list,
                  })),
+        'avg_inference_latency_per_batch': avg_inference_latency_per_batch
     }
 
     for key, val in preds_dict.items():

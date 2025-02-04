@@ -1,8 +1,10 @@
 import collections
+import copy
 import os
 import traceback
 from typing import List, Dict, Optional
 
+import xgboost
 import dgl
 import networkx as nx
 import numpy as np
@@ -10,6 +12,7 @@ import torch
 from sklearn.preprocessing import RobustScaler
 
 from cross_db_benchmark.benchmark_tools.generate_workload import Operator
+from flat_vector_baseline import extract_feats, encode_features
 from models.preprocessing.feature_statistics import FeatureType
 from models.zero_shot_models.depth_annotator import annotate_graph_with_depth_information
 from models.zero_shot_models.specific_models.udf_edge_types import udf_node_types, udf_canonical_edge_types
@@ -111,6 +114,7 @@ def plan_to_graph(node, database_id, plan_depths, plan_features, plan_to_plan_ed
                   w_loop_end_node: bool, add_loop_loopend_edge: bool, est_card_udf_sel: int,
                   card_type_below_udf: Optional[str], card_type_above_udf: Optional[str],
                   card_type_in_udf: Optional[str],
+                  flat_vector_feats_list: List,
                   parent_node_id=None,
                   depth=0, zs_paper_dataset: bool = False, card_est_assume_lazy_eval: bool = True):
     assert dbms is not None
@@ -133,9 +137,10 @@ def plan_to_graph(node, database_id, plan_depths, plan_features, plan_to_plan_ed
 
             # check if the output column is a "normal" output column or a UDF result
             if zs_paper_dataset or output_column.udf_output == "False":
-
+                assert output_column.columns is not None, f'node: {node} / {output_column}'
+                out_cols = tuple(output_column.columns)
                 output_column_node_id = output_column_idx.get(
-                    (output_column.aggregation, tuple(output_column.columns), database_id))
+                    (output_column.aggregation, out_cols, database_id))
 
                 # if not, create
                 if output_column_node_id is None:
@@ -212,7 +217,8 @@ def plan_to_graph(node, database_id, plan_depths, plan_features, plan_to_plan_ed
                              multi_label_keep_duplicates=multi_label_keep_duplicates,
                              udf_in_card_stats=udf_in_card_stats, w_loop_end_node=w_loop_end_node,
                              add_loop_loopend_edge=add_loop_loopend_edge, card_type_in_udf=card_type_in_udf,
-                             card_est_assume_lazy_eval=card_est_assume_lazy_eval)
+                             card_est_assume_lazy_eval=card_est_assume_lazy_eval,
+                             flat_vector_feats_list=flat_vector_feats_list)
 
                 # link the output column node (src) to the corresponding plan node (dst)
                 output_column_to_plan_edges.append((output_column_node_id, plan_node_id))
@@ -240,7 +246,8 @@ def plan_to_graph(node, database_id, plan_depths, plan_features, plan_to_plan_ed
                          dbms=dbms, multi_label_keep_duplicates=multi_label_keep_duplicates,
                          udf_in_card_stats=udf_in_card_stats, w_loop_end_node=w_loop_end_node,
                          add_loop_loopend_edge=add_loop_loopend_edge,
-                         card_est_assume_lazy_eval=card_est_assume_lazy_eval, card_type_in_udf=card_type_in_udf)
+                         card_est_assume_lazy_eval=card_est_assume_lazy_eval, card_type_in_udf=card_type_in_udf,
+                         flat_vector_feats_list=flat_vector_feats_list)
 
         if len(udf_node_features['RET']) > num_udf_ret_nodes_before:
             # there is a UDF involved in the filter
@@ -291,7 +298,7 @@ def plan_to_graph(node, database_id, plan_depths, plan_features, plan_to_plan_ed
                       udf_filter_num_logicals_stats=udf_filter_num_logicals_stats,
                       udf_filter_num_literals_stats=udf_filter_num_literals_stats, est_card_udf_sel=est_card_udf_sel,
                       card_type_above_udf=card_type_above_udf, card_type_in_udf=card_type_in_udf,
-                      card_type_below_udf=card_type_below_udf)
+                      card_type_below_udf=card_type_below_udf, flat_vector_feats_list=flat_vector_feats_list)
 
 
 def parse_predicates(db_column_features, feature_statistics, filter_column, filter_to_plan_edges, plan_featurization,
@@ -300,6 +307,7 @@ def parse_predicates(db_column_features, feature_statistics, filter_column, filt
                      udf_node_features, col_to_COMP_edges, col_to_INVOC_edges, RET_to_outcol_edges, RET_to_filter_edges,
                      plan_source_file: str,
                      dbms: str, multi_label_keep_duplicates: bool, udf_in_card_stats, card_type_in_udf: Optional[str],
+                     flat_vector_feats_list: List,
                      plan_node_id=None,
                      parent_filter_node_id=None, depth=0, w_loop_end_node: bool = False,
                      add_loop_loopend_edge: bool = False, card_est_assume_lazy_eval: bool = True):
@@ -376,7 +384,8 @@ def parse_predicates(db_column_features, feature_statistics, filter_column, filt
                          dbms=dbms, multi_label_keep_duplicates=multi_label_keep_duplicates,
                          udf_in_card_stats=udf_in_card_stats, w_loop_end_node=w_loop_end_node,
                          add_loop_loopend_edge=add_loop_loopend_edge,
-                         card_est_assume_lazy_eval=card_est_assume_lazy_eval, card_type_in_udf=card_type_in_udf)
+                         card_est_assume_lazy_eval=card_est_assume_lazy_eval, card_type_in_udf=card_type_in_udf,
+                         flat_vector_feats_list=flat_vector_feats_list)
 
     # filter_column has one udf specific attribute => udf_name
     # if udf_name is None, then no UDF is used
@@ -388,6 +397,8 @@ def parse_predicates(db_column_features, feature_statistics, filter_column, filt
             filter_column.children) == 0, "UDF filter column expected to have no children when seeing an UDF"
         # make sure that all columns of the udf are added to the column features
         db_column_features = db_statistics[database_id].column_stats
+        assert plan_params.get('udf_params') is not None, f'{plan_params}'
+
         for param in plan_params.get('udf_params'):
             column_node_id = column_idx.get((param, database_id))
             if column_node_id is None:
@@ -407,7 +418,8 @@ def parse_predicates(db_column_features, feature_statistics, filter_column, filt
                      output_col_dst_id=None, plan_source_file=plan_source_file, dbms=dbms,
                      multi_label_keep_duplicates=multi_label_keep_duplicates, udf_in_card_stats=udf_in_card_stats,
                      w_loop_end_node=w_loop_end_node, add_loop_loopend_edge=add_loop_loopend_edge,
-                     card_est_assume_lazy_eval=card_est_assume_lazy_eval, card_type_in_udf=card_type_in_udf)
+                     card_est_assume_lazy_eval=card_est_assume_lazy_eval, card_type_in_udf=card_type_in_udf,
+                     flat_vector_feats_list=flat_vector_feats_list)
 
 
 lookup = {
@@ -426,7 +438,8 @@ def udf_to_graph(udf_name, w_loop_end_node: bool, udf_internal_edges, udf_node_f
                  feature_statistics, plan_featurization, table_id: int, filter_dst_id: Optional[int],
                  output_col_dst_id: Optional[int], card_type_in_udf: Optional[str],
                  plan_source_file: str, dbms: str, multi_label_keep_duplicates=False,
-                 add_loop_loopend_edge: bool = False, card_est_assume_lazy_eval: bool = True):
+                 add_loop_loopend_edge: bool = False, card_est_assume_lazy_eval: bool = True,
+                 flat_vector_feats_list: List = None):
     atts = vars(db_stats[db_id])
 
     udf_suffix = []
@@ -449,6 +462,9 @@ def udf_to_graph(udf_name, w_loop_end_node: bool, udf_internal_edges, udf_node_f
     udf_graph: nx.DiGraph = nx.read_gpickle(full_path)  # restore UDF graph from gpickle
     col_edges = []
     nx_dgl_map = {}
+
+    if flat_vector_feats_list is not None:
+        flat_vector_feats_list.append(extract_feats(udf_graph))
 
     for edge in udf_graph.edges:
         src = edge[0]
@@ -674,6 +690,168 @@ def get_col_id(var_id, db_id: int, table_id: int, db_stats, dbms: str):
     raise Exception(f"Could not find column {var_id} in table {table_name} \n {db_stats}")
 
 
+def find_udf_node(plan):
+    # extract operator that involves the udf from plan
+    if hasattr(plan.plan_parameters, 'udf_name') or hasattr(plan.plan_parameters, 'udf_params') or hasattr(
+            plan.plan_parameters, 'udf_table'):
+        return plan
+    else:
+        # check child nodes
+        for c in plan.children:
+            res = find_udf_node(c)
+            if res is not None:
+                return res
+        return None
+
+
+def prune_udf_information_from_filter(filter):
+    # remove any udf related information from the filter
+    if hasattr(filter, 'udf_name'):
+        delattr(filter, 'udf_name')
+    if hasattr(filter, 'udf_params'):
+        delattr(filter, 'udf_params')
+    if hasattr(filter, 'udf_table'):
+        delattr(filter, 'udf_table')
+
+    if hasattr(filter, 'children'):
+        for c in filter.children:
+            prune_udf_information_from_filter(c)
+
+
+def prune_udf_information(plan):
+    # remove any udf related informaiton from the query plan
+    if hasattr(plan.plan_parameters, 'udf_name'):
+        delattr(plan.plan_parameters, 'udf_name')
+    if hasattr(plan.plan_parameters, 'udf_params'):
+        delattr(plan.plan_parameters, 'udf_params')
+    if hasattr(plan.plan_parameters, 'udf_table'):
+        delattr(plan.plan_parameters, 'udf_table')
+
+    if hasattr(plan.plan_parameters, 'output_columns'):
+        for col in plan.plan_parameters.output_columns:
+            col.udf_output = 'False'
+            if hasattr(col, 'udf_name'):
+                delattr(col, 'udf_name')
+                col.columns = []  # adding here a real column could improve results
+
+            assert col.columns is not None, f'plan: {plan}'
+
+    if hasattr(plan.plan_parameters, 'filter_columns'):
+        prune_udf_information_from_filter(plan.plan_parameters.filter_columns)
+
+    if hasattr(plan, 'udf'):
+        delattr(plan, 'udf')
+    if hasattr(plan, 'udf_pullup'):
+        plan.udf_pullup = False
+
+    plan.plan_parameters.above_udf_filter = False
+    plan.plan_parameters.is_udf_filter = False
+
+    # iterate over children
+    for c in plan.children:
+        prune_udf_information(c)
+
+
+def add_pseudo_table_to_stats(db_statistics: Dict, database_id: int, pseudo_table_name: int, num_rows: int) -> int:
+    # add information about the input to the UDF to the table_stats
+    assert database_id in db_statistics
+    assert pseudo_table_name not in db_statistics[database_id].table_stats
+    db_statistics[database_id].table_stats.append({'table_name': pseudo_table_name,
+                                                   'estimated_size': num_rows})
+    return len(db_statistics[database_id].table_stats) - 1
+
+
+def split_graph_into_udf_and_sql(plan, db_statistics: Dict):
+    # split the graph into the UDF graph (a reduced query plan with only the UDF,
+    # and the plan of the surrounding query (with all UDF information removed).
+
+    # find the root node of the udf
+    orig_udf_node = find_udf_node(plan)
+
+    assert orig_udf_node is not None, f'Could not find UDF node in plan: {plan}'
+
+    # create a copy of the UDF node element
+    udf_plan = copy.deepcopy(orig_udf_node)
+
+    # extarct udf_name
+    udf_name = plan.udf.udf_name
+
+    if len(udf_plan.children) == 0:
+        # no children => no changes to UDF graph necessary
+        pass
+    elif len(udf_plan.children) == 1:
+        # introduce a virtual scan child node
+        child = udf_plan.children[0]
+        if len(child.children) == 0:
+            # child has no children. I.e. do nothing. It is already a scan / ...
+            pass
+        else:
+            # overwrite the child node
+            child.children = []
+
+            # delete attr
+            attr_to_delete = ['join', 'filter_columns', 'literal_feature', 'text']
+            for attr in attr_to_delete:
+                if hasattr(child.plan_parameters, attr):
+                    delattr(child.plan_parameters, attr)
+
+            # overwrite operator
+            child.plan_parameters.op_name = 'SEQ_SCAN'
+            child.plan_parameters.table_name = udf_name
+
+            # create pseudo table
+            pseudo_table_id = add_pseudo_table_to_stats(db_statistics, database_id=plan.database_id,
+                                                        pseudo_table_name=udf_name,
+                                                        num_rows=child.plan_parameters.act_card)
+            child.plan_parameters.table_id = pseudo_table_id
+
+            # overwrite child card
+            child.act_children_card = 1
+            child.est_children_card = 1
+            child.dd_est_children_card = 1
+            child.wj_est_children_card = 1
+
+    else:
+        raise Exception(f'UDF node has more than one child: {udf_plan.children}')
+
+    # copy over root node info
+    udf_plan.query = plan.query
+    udf_plan.plan_runtime_ms = -42
+    udf_plan.num_tables = 1
+    udf_plan.num_filters = 0
+    udf_plan.database_name = plan.database_name
+    udf_plan.database_id = plan.database_id
+    udf_plan.source_file = plan.source_file
+    udf_plan.udf_pullup = plan.udf_pullup
+    udf_plan.udf = plan.udf
+
+    # from sql_plan, prune all udf information
+    prune_udf_information(plan)
+
+    return plan, udf_plan
+
+
+def split_graphs_into_udf_and_sql(plans, db_statistics: Dict):
+    # for ablation study: udf_cost + sql_cost = total_cost
+    out_plans = []
+    udf_graph_bitmask = []
+    for sample_idx, plan in plans:
+        # check if the plan contains a UDF
+        if hasattr(plan, 'udf') and plan.udf is not None:
+            # do the split
+            sql_plan, udf_plan = split_graph_into_udf_and_sql(plan, db_statistics)
+            # add both plans
+            out_plans.append((sample_idx, sql_plan))
+            out_plans.append((sample_idx, udf_plan))
+            udf_graph_bitmask.append(False)
+            udf_graph_bitmask.append(True)
+        else:
+            out_plans.append((sample_idx, plan))
+            udf_graph_bitmask.append(False)
+
+    return out_plans, udf_graph_bitmask
+
+
 def postgres_plan_collator(plans, est_card_udf_sel: Optional[int],
                            card_type_below_udf: Optional[str], card_type_above_udf: Optional[str],
                            card_type_in_udf: Optional[str], feature_statistics=None, db_statistics=None,
@@ -682,13 +860,19 @@ def postgres_plan_collator(plans, est_card_udf_sel: Optional[int],
                            zs_paper_dataset: bool = False, train_udf_graph_against_udf_runtime: bool = False,
                            w_loop_end_node: bool = False, add_loop_loopend_edge: bool = False,
                            card_est_assume_lazy_eval: bool = True, plans_have_no_udf: bool = False,
-                           skip_udf: bool = False
+                           skip_udf: bool = False, separate_sql_udf_graphs: bool = False,
+                           annotate_flat_vector_udf_preds:bool=False, flat_vector_model_path:str=None
                            ):
     """
     Combines physical plans into a large graph that can be fed into ML models.
     :return:
     """
     try:
+        if separate_sql_udf_graphs or annotate_flat_vector_udf_preds:
+            plans, udf_graph_bitmask = split_graphs_into_udf_and_sql(plans, db_statistics=db_statistics)
+        else:
+            udf_graph_bitmask = None
+
         assert dbms is not None
 
         # output:
@@ -788,6 +972,12 @@ def postgres_plan_collator(plans, est_card_udf_sel: Optional[int],
         # prepare robust encoder for the numerical fields
         add_numerical_scalers(feature_statistics)
 
+        # prepare flat vector features list - only used for baseline: udf-cost with flat-vector, sql cost with our model
+        if annotate_flat_vector_udf_preds:
+            flat_vector_feats_list = []
+        else:
+            flat_vector_feats_list = None
+
         def get_num_nodes_edges():
             """
             Helper function to get the number of nodes and edges in the graph
@@ -859,7 +1049,7 @@ def postgres_plan_collator(plans, est_card_udf_sel: Optional[int],
                               udf_filter_num_logicals_stats=udf_filter_num_logicals,
                               udf_filter_num_literals_stats=udf_filter_num_literals, est_card_udf_sel=est_card_udf_sel,
                               card_type_below_udf=card_type_below_udf,
-                              card_type_above_udf=card_type_above_udf, card_type_in_udf=card_type_in_udf)
+                              card_type_above_udf=card_type_above_udf, card_type_in_udf=card_type_in_udf,flat_vector_feats_list=flat_vector_feats_list)
             except Exception as e:
                 print(
                     f'Card type below: {card_type_below_udf}, card type above: {card_type_above_udf}, card type in udf: {card_type_in_udf}',
@@ -960,8 +1150,28 @@ def postgres_plan_collator(plans, est_card_udf_sel: Optional[int],
             udf_filter_num_logicals=udf_filter_num_logicals,
             udf_filter_num_literals=udf_filter_num_literals,
             graph_num_nodes=graph_num_nodes,
-            graph_num_edges=graph_num_edges
+            graph_num_edges=graph_num_edges,
         )
+
+        # run flat vector model
+        if flat_vector_feats_list is not None:
+            if len(flat_vector_feats_list)>0:
+                # compute flat vector predictions
+                model = xgboost.XGBRegressor()
+                assert flat_vector_model_path is not None
+                model.load_model(flat_vector_model_path)
+
+                encoded_flat_vector_feats_list = encode_features(flat_vector_feats_list,onehot_all_ops=False,onehot_np_ops=True)
+
+                flat_vector_preds = model.predict(encoded_flat_vector_feats_list)
+
+                # extract number of udf invocations and multiply with per tuple cost estimates
+                act_udf_invoc = [card for card in stats['udf_in_card'] if card != -1]
+                flat_vector_preds = [pred * card for pred, card in zip(flat_vector_preds, act_udf_invoc)]
+
+                stats['flat_vector_predictions']=flat_vector_preds
+            else:
+                stats['flat_vector_predictions'] = []
 
         assert len(labels_ms) == len(plans)
         assert len(plan_depths) == len(plan_features)
@@ -1117,7 +1327,7 @@ def postgres_plan_collator(plans, est_card_udf_sel: Optional[int],
                                                           etypes_canonical_list=udf_canonical_edge_types,
                                                           max_depth=max_depth + 100)
 
-        return graph, features, labels_s, stats, sample_idxs
+        return graph, features, labels_s, stats, sample_idxs, udf_graph_bitmask
     except Exception as e:
         print(f'Error in postgres_plan_collator: {e}', flush=True)
         traceback.print_exc()

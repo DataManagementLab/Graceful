@@ -114,7 +114,8 @@ if __name__ == '__main__':
                                             add_loop_loopend_edge=config['add_loop_loopend_edge'],
                                             card_est_assume_lazy_eval=config['card_est_assume_lazy_eval'],
                                             min_runtime_ms=config['min_runtime_ms'],
-                                            create_dataset_fn_test_artefacts=create_dataset_fn_test_artefacts)
+                                            create_dataset_fn_test_artefacts=create_dataset_fn_test_artefacts,
+                                            separate_sql_udf_graphs=config['separate_sql_udf_graphs'],)
 
     feature_statistics = load_json(statistics_file, namespace=False)
     # add stats for artificial features (additional flags / ...)

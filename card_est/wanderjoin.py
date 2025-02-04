@@ -19,6 +19,11 @@ import time
 import numpy as np
 import networkx as nx
 
+"""
+Based on: https://github.com/parimarjan/sql_representation/blob/master/sql_rep/utils.py
+and https://github.com/parimarjan/learned-cardinalities/blob/master/scripts/wanderjoin.py
+"""
+
 MAX_WALKS = 1000000
 CONF_ALPHA = 0.99
 
@@ -426,8 +431,6 @@ class WanderJoin():
                             half_interval = std * alpha / np.sqrt(card_samples[nodes])
                             print("nodes: {}, succ walks: {}, true: {}, est: {}+/-{}, std: {}".format(
                                 nodes, succ_walks[nodes], true, est, half_interval, std))
-
-                # FIXME: not sure which is the best one here..
 
                 if tot_duration > self.walks_timeout:
                     print("duration exceeded, num walks: {}, num succ walks: {}".format(

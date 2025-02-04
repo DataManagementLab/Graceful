@@ -22,8 +22,8 @@ def recursive_to(iterable, device):
             recursive_to(v, device)
 
 
-def batch_to(batch, device, label_norm) -> Tuple[Tuple[dgl.DGLGraph, torch.Tensor], torch.Tensor, Dict[str, Any], Any]:
-    graph, features, label, stats, sample_idxs = batch
+def batch_to(batch, device, label_norm) -> Tuple[Tuple[dgl.DGLGraph, torch.Tensor], torch.Tensor, Dict[str, Any], Any, Any]:
+    graph, features, label, stats, sample_idxs, udf_graph_bitmask = batch
 
     # normalize the labels for training
     if label_norm is not None:
@@ -35,7 +35,7 @@ def batch_to(batch, device, label_norm) -> Tuple[Tuple[dgl.DGLGraph, torch.Tenso
     recursive_to(features, device)
 
     graph = graph.to(device, non_blocking=True)
-    return (graph, features), label, stats, sample_idxs
+    return (graph, features), label, stats, sample_idxs, udf_graph_bitmask
 
 
 def flatten_dict(d, parent_key='', sep='_'):
