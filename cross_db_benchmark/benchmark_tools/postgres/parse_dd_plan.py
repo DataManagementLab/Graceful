@@ -14,6 +14,10 @@ from cross_db_benchmark.benchmark_tools.postgres.utils import plan_statistics, r
     extract_udf_params_from_str
 
 
+class CrossproductOperatorError(Exception):
+    def __init__(self, message):
+        super().__init__(message)
+
 def extract_udf_stats(udf_name: str, udf_code_dict):
     udf_math_lib_imported = False
     udf_np_lib_imported = False
@@ -90,9 +94,15 @@ def parse_dd_plans(run_stats, min_runtime_ms: int, max_runtime_ms: int, parse_ba
 
     for i, column_stat in enumerate(database_stats.column_stats):
         table = column_stat.table_name
+
+        if table == 'helper_view':
+            # this is an artifact from UDF graph creation - should not be in here
+            continue
+
         column = column_stat.column_name
         column_stat.table_size = table_sizes[table]
         column_id_mapping[(table, column)] = i
+        column_id_mapping[(table,f'{table}_{column}')]=i # for intermed positioning some aliases of the form table_col are used
         partial_column_name_mapping[column].add(table)
 
     # parse the plans
@@ -112,6 +122,7 @@ def parse_dd_plans(run_stats, min_runtime_ms: int, max_runtime_ms: int, parse_ba
     col_not_matching_count = 0
     filter_op_not_recognized_count = 0
     filter_parsing_error_count = 0
+    crossproduct_operator_error_count = 0
 
     for q in tqdm(run_stats.query_list):
         if cap_queries is not None and len(parsed_plans) >= cap_queries:
@@ -186,6 +197,10 @@ def parse_dd_plans(run_stats, min_runtime_ms: int, max_runtime_ms: int, parse_ba
         except FilterParsingError as e:
             # filter could not be parsed
             filter_parsing_error_count += 1
+            continue
+        except CrossproductOperatorError as e:
+            # cross product operator found
+            crossproduct_operator_error_count += 1
             continue
         except Exception as e:
             print(q.analyze_plans[0])
@@ -296,6 +311,7 @@ def parse_dd_plans(run_stats, min_runtime_ms: int, max_runtime_ms: int, parse_ba
     print(f'Number of queries with columns not matching to tables: {col_not_matching_count}')
     print(f'Number of queries with filters op not recognized: {filter_op_not_recognized_count}')
     print(f'Number of queries with filter parsing error: {filter_parsing_error_count}')
+    print(f'Number of queries with crossproduct operator: {crossproduct_operator_error_count}')
     print("Operators statistics (appear in x% of queries)")
     for op, op_count in op_perc.items():
         print(f"\t{str(op)}: {op_count / len(avg_runtimes_ms) * 100:.0f}%")
@@ -590,6 +606,9 @@ def parse_plan_recursively(plan, include_zero_card: bool, table_id_mapping: Dict
 
     # extract information
     plan_parameters['op_name'] = plan.name.strip()
+
+    if plan_parameters['op_name'] == 'CROSS_PRODUCT':
+        raise CrossproductOperatorError(f"Cross product operator found in plan: {plan}")
 
     # raise exception if cardinality is zero
     if plan.cardinality == 0 and not include_zero_card:

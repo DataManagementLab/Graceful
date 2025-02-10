@@ -31,11 +31,18 @@ if __name__ == '__main__':
     if args.gather is None:  # determine if we build graph or gather the feature stats
         graph_kwargs = {'add_loop_end_node': args.add_loop_end_node}
 
-        if 'pullup' in exp_folder.lower() or 'pull_up' in exp_folder.lower():
+        if 'intermed' in exp_folder.lower():
+            udf_intermed_pos=True
+            print(f'Assume intermed udfs in exp folder {exp_folder}')
+            pullup_udf = False
+        elif 'pullup' in exp_folder.lower() or 'pull_up' in exp_folder.lower():
             pullup_udf = True
             print(f'Assume pullup udfs in exp folder {exp_folder}')
+            udf_intermed_pos = False
         else:
             pullup_udf = False
+            udf_intermed_pos = False
+
 
         duckdb_kwargs = {
             'database': os.path.join(args.duckdb_dir, f'{args.dataset}_10_1.db'),
@@ -47,7 +54,7 @@ if __name__ == '__main__':
         dbms_wrapper = DBMSWrapper(dbms=args.dbms, dbms_kwargs=args.dbms_kwargs, db_name=args.dataset)
         prepareGraphs(code_location=os.path.join(args.exp_folder, "dbs", args.dataset, "sql_scripts"),
                       graph_location=os.path.join(args.exp_folder, "dbs", args.dataset, "created_graphs"),
-                      pullup_udf=pullup_udf, exp_folder=args.exp_folder,
+                      pullup_udf=pullup_udf, udf_intermed_pos=udf_intermed_pos, exp_folder=args.exp_folder,
                       func_tab_map=os.path.join(args.exp_folder, "dbs", args.dataset, "func_table_dict.csv"),
                       db_name=args.dataset, dbms_wrapper=dbms_wrapper, graph_kwargs=graph_kwargs,
                       card_est_assume_lazy_eval=args.card_est_assume_lazy_eval,

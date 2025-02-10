@@ -4,11 +4,11 @@ import os
 import traceback
 from typing import List, Dict, Optional
 
-import xgboost
 import dgl
 import networkx as nx
 import numpy as np
 import torch
+import xgboost
 from sklearn.preprocessing import RobustScaler
 
 from cross_db_benchmark.benchmark_tools.generate_workload import Operator
@@ -861,7 +861,7 @@ def postgres_plan_collator(plans, est_card_udf_sel: Optional[int],
                            w_loop_end_node: bool = False, add_loop_loopend_edge: bool = False,
                            card_est_assume_lazy_eval: bool = True, plans_have_no_udf: bool = False,
                            skip_udf: bool = False, separate_sql_udf_graphs: bool = False,
-                           annotate_flat_vector_udf_preds:bool=False, flat_vector_model_path:str=None
+                           annotate_flat_vector_udf_preds: bool = False, flat_vector_model_path: str = None
                            ):
     """
     Combines physical plans into a large graph that can be fed into ML models.
@@ -1049,7 +1049,8 @@ def postgres_plan_collator(plans, est_card_udf_sel: Optional[int],
                               udf_filter_num_logicals_stats=udf_filter_num_logicals,
                               udf_filter_num_literals_stats=udf_filter_num_literals, est_card_udf_sel=est_card_udf_sel,
                               card_type_below_udf=card_type_below_udf,
-                              card_type_above_udf=card_type_above_udf, card_type_in_udf=card_type_in_udf,flat_vector_feats_list=flat_vector_feats_list)
+                              card_type_above_udf=card_type_above_udf, card_type_in_udf=card_type_in_udf,
+                              flat_vector_feats_list=flat_vector_feats_list)
             except Exception as e:
                 print(
                     f'Card type below: {card_type_below_udf}, card type above: {card_type_above_udf}, card type in udf: {card_type_in_udf}',
@@ -1155,13 +1156,14 @@ def postgres_plan_collator(plans, est_card_udf_sel: Optional[int],
 
         # run flat vector model
         if flat_vector_feats_list is not None:
-            if len(flat_vector_feats_list)>0:
+            if len(flat_vector_feats_list) > 0:
                 # compute flat vector predictions
                 model = xgboost.XGBRegressor()
                 assert flat_vector_model_path is not None
                 model.load_model(flat_vector_model_path)
 
-                encoded_flat_vector_feats_list = encode_features(flat_vector_feats_list,onehot_all_ops=False,onehot_np_ops=True)
+                encoded_flat_vector_feats_list = encode_features(flat_vector_feats_list, onehot_all_ops=False,
+                                                                 onehot_np_ops=True)
 
                 flat_vector_preds = model.predict(encoded_flat_vector_feats_list)
 
@@ -1169,7 +1171,7 @@ def postgres_plan_collator(plans, est_card_udf_sel: Optional[int],
                 act_udf_invoc = [card for card in stats['udf_in_card'] if card != -1]
                 flat_vector_preds = [pred * card for pred, card in zip(flat_vector_preds, act_udf_invoc)]
 
-                stats['flat_vector_predictions']=flat_vector_preds
+                stats['flat_vector_predictions'] = flat_vector_preds
             else:
                 stats['flat_vector_predictions'] = []
 

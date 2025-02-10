@@ -467,7 +467,9 @@ def extract_test_paths(path: str, card: str, target_dir: str, filename_model: st
 
     # check if a test workload with the same name already exists
     # rename the workload
-    if 'pullup' in path:
+    if 'intermed' in path:
+        test_workload = test_workload + '_intermed'
+    elif 'pullup' in path:
         test_workload = test_workload + '_pullup'
     elif 'pushdown' in path:
         test_workload = test_workload + '_pushdown'

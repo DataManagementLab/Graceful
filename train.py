@@ -151,6 +151,7 @@ if __name__ == '__main__':
     parser.add_argument('--work_with_udf_repr', default=False, action='store_true')
     parser.add_argument('--include_no_udf_data', default=False, action='store_true')
     parser.add_argument('--include_pullup_data', default=False, action='store_true')
+    parser.add_argument('--include_intermed_udf_pos_data', default=False, action='store_true')
     parser.add_argument('--include_pushdown_data', default=False, action='store_true')
     parser.add_argument('--include_no_udf_data_large', default=False, action='store_true')
     parser.add_argument('--include_select_only_w_branch', default=False, action='store_true')
@@ -243,6 +244,8 @@ if __name__ == '__main__':
         args_config['include_no_udf_data'] = args.include_no_udf_data
     if args.include_pullup_data:
         args_config['include_pullup_data'] = args.include_pullup_data
+    if args.include_intermed_udf_pos_data:
+        args_config['include_intermed_udf_pos_data'] = args.include_intermed_udf_pos_data
     if args.include_pushdown_data:
         args_config['include_pushdown_data'] = args.include_pushdown_data
     if args.include_no_udf_data_large:

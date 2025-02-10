@@ -72,7 +72,7 @@ def enhanceUDFgraph_query(udfgraph, func_name, func_header, dbms: str):
     return udfgraph
 
 
-def enhanceUDFgraph_card(graph, table_name, dbms_wrapper: DBMSWrapper, pullup_udf: bool, query_plan: Dict,
+def enhanceUDFgraph_card(graph, table_name, dbms_wrapper: DBMSWrapper, pullup_udf: bool, udf_intermed_pos:bool, query_plan: Dict,
                          database_statistics: Dict, sql_query: str, est_stats: List[Dict], duckdb_kwargs: Dict,
                          schema_relationships: Dict,
                          deepdb_estimator: DeepDBEstimator = None, card_est_assume_lazy_eval: bool = False,
@@ -80,7 +80,7 @@ def enhanceUDFgraph_card(graph, table_name, dbms_wrapper: DBMSWrapper, pullup_ud
     # create materialized view based on the raw query
     # create mv if udf call is input to an aggregate function
     mat_view_name = mat_view_handling(raw_query=sql_query, dbms_wrapper=dbms_wrapper, table_name=table_name,
-                                      delete=False, pullup_udf=pullup_udf)
+                                      delete=False, pullup_udf=pullup_udf or udf_intermed_pos)
 
     assert not card_est_assume_lazy_eval
     where_conds, join_conds, tables = extract_filter_join_conds_below_udf_from_plan(query_plan_node=query_plan,
@@ -171,8 +171,8 @@ def enhanceUDFgraph_card(graph, table_name, dbms_wrapper: DBMSWrapper, pullup_ud
                         '"'), f"Table name in filter condition does not match table name: {table_name} / {filter.column[0]}"
 
                 dbms_f = FilterCond(table_name=table_name if mat_view_name is None else mat_view_name,
-                                    column_name=filter_column, operator=op,
-                                    value=filter.literal)
+                                    column_name=filter_column, # if not udf_intermed_pos else f'{table_name}_{filter_column}',
+                                    operator=op, value=filter.literal)
 
                 dbms_conditions.append(dbms_f)
 
@@ -192,6 +192,7 @@ def enhanceUDFgraph_card(graph, table_name, dbms_wrapper: DBMSWrapper, pullup_ud
             path_act_card = dbms_wrapper.exec(count_query)[0][0]
             path_est_card = dbms_wrapper.get_est_card(query)
         except Exception as e:
+            print(f'count query: {count_query}', flush=True)
             print(json.dumps(query_plan), flush=True)
             raise e
 
@@ -302,7 +303,7 @@ def enhanceUDFgraph_card(graph, table_name, dbms_wrapper: DBMSWrapper, pullup_ud
     # delete the materialized view
     if sql_query is not None:
         _ = mat_view_handling(raw_query=sql_query, dbms_wrapper=dbms_wrapper, table_name=table_name, delete=True,
-                              pullup_udf=pullup_udf)
+                              pullup_udf=pullup_udf or udf_intermed_pos)
     graph = det_final_card(graph)
     return graph, col_col_contained
 
@@ -452,7 +453,14 @@ def mat_view_handling(raw_query, delete, dbms_wrapper: DBMSWrapper, table_name, 
             assert ' as nested_query' in parts[1], f"Nested query does not have alias: {raw_query}"
             parts = parts[1].split(') as nested_query')
             assert len(parts) == 2, f"Multiple nested queries found: {raw_query}"
-            transformed_query = f'SELECT {parts[0]}'
+
+            if not parts[0].startswith('*'):
+                tmp = parts[0]
+                splits = tmp.split(' FROM ')
+                assert len(splits)==2, f"Multiple FROM clauses found: {tmp}"
+                transformed_query = f'SELECT * FROM {splits[1]}'
+            else:
+                transformed_query = f'SELECT {parts[0]}'
             return transformed_query
         else:
             return None

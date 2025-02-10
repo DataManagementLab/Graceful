@@ -166,6 +166,12 @@ def get_config(hyperparams: Dict[str, Any], wl_base_path: str, assemble_filename
     else:
         include_pullup_data = False
 
+    if 'include_intermed_udf_pos_data' in hyperparams:
+        assert hyperparams['include_intermed_udf_pos_data']
+        include_intermed_udf_pos_data = hyperparams.pop('include_intermed_udf_pos_data')
+        assert include_intermed_udf_pos_data
+        data_wl_str += 'intermed'
+
     if 'include_pushdown_data' in hyperparams:
         assert hyperparams['include_pushdown_data']
         include_pushdown_data = hyperparams.pop('include_pushdown_data')
@@ -199,6 +205,7 @@ def get_config(hyperparams: Dict[str, Any], wl_base_path: str, assemble_filename
             hyperparams, wl_base_path=wl_base_path, zs_paper_dataset=config['zs_paper_dataset'],
             include_no_udf_data=include_no_udf_data, include_pullup_data=include_pullup_data,
             include_pushdown_data=include_pushdown_data, include_no_udf_data_large=include_no_udf_data_large,
+            include_intermed_udf_pos_data=include_intermed_udf_pos_data,
             include_select_only_w_branch=include_select_only_w_branch)
     else:
         data_keyword = hyperparams.pop('data_keyword')
@@ -426,6 +433,7 @@ def get_config(hyperparams: Dict[str, Any], wl_base_path: str, assemble_filename
 def compile_train_test_filenames(hyperparams: Dict, wl_base_path: str, zs_paper_dataset: bool = False,
                                  include_no_udf_data: bool = False, include_no_udf_data_large: bool = False,
                                  include_pushdown_data: bool = True, include_pullup_data: bool = False,
+                                include_intermed_udf_pos_data: bool = False,
                                  include_select_only_w_branch: bool = False):
     # data
     data_keyword = hyperparams.pop('data_keyword')
@@ -467,6 +475,15 @@ def compile_train_test_filenames(hyperparams: Dict, wl_base_path: str, zs_paper_
                 path_list.append(path)
             else:
                 print(f'No {data_keyword} data found for {dataset.db_name} ({path})')
+
+        if include_intermed_udf_pos_data:
+            path = os.path.join(
+                wl_base_path, 'duckdb_intermed_pullup', 'parsed_plans',
+                dataset.db_name, 'workload.json')
+            if os.path.exists(path):
+                path_list.append(path)
+            else:
+                print(f'No intermed pullup data found for {dataset.db_name}')
 
         if include_pullup_data:
             path = os.path.join(

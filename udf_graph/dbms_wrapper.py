@@ -96,7 +96,7 @@ class DBMSWrapper():
             try:
                 result = self.conn.sql(sql)
             except duckdb.CatalogException as e:
-                print(f'Could not execute {sql}')
+                print(f'Could not execute {sql} (CatalogException) {e}')
                 raise e
             except duckdb.ParserException as e:
                 print(f'Could not parse {sql}')

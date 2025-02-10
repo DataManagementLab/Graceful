@@ -90,7 +90,7 @@ def parse_run(source_paths, target_path, db_name: str, deepdb_ensemble_locations
                                            scale=deepdb_dataset_scale_factor)
 
         annotate_deepdb_card(parsed_runs=parsed_runs, deepdb_estimator=deepdb_estimator,
-                             schema_relationships=schema_relationships)
+                             schema_relationships=schema_relationships, strip_plans_w_unexp_join_cond=True)
 
     # annotate wanderjoin cardinalities
     if not skip_wj:

@@ -73,7 +73,7 @@ def modify_indexes(db_conn, sql_query, existing_indexes, timeout_sec):
 def run_pg_workload(workload_path, database, db_name, database_conn_args, database_kwarg_dict, target_path, run_kwargs,
                     repetitions_per_query, timeout_sec, with_indexes=False, cap_workload=None, hints=None,
                     min_runtime=100, no_variants=26, udf_load_path: str = None, udf_drop_path: str = None,
-                    pullup_udf: bool = False):
+                    pullup_udf: bool = False, pullup_udf_intermed: bool = False):
     os.makedirs(os.path.dirname(target_path), exist_ok=True)
 
     if udf_load_path is not None and database == DatabaseSystem.POSTGRES:
@@ -127,28 +127,33 @@ def run_pg_workload(workload_path, database, db_name, database_conn_args, databa
     sql_queries = [rewrite_query_to_schema(q, db_name) for q in sql_queries]
 
     # pull up UDFs in the SQL queries
-    if pullup_udf:
+    if pullup_udf or pullup_udf_intermed:
         tmp = []
         for sql_q in sql_queries:
-            rewritten, has_filter_udf = pullup_udf_in_sql(sql_q)
+            try:
+                rewritten, has_filter_udf = pullup_udf_in_sql(sql_q, intermed_pos=pullup_udf_intermed)
+            except Exception as e:
+                print(f"Could not pull up UDFs in {sql_q}",flush=True)
+                raise e
             if has_filter_udf:
                 tmp.append(rewritten)
 
         sql_queries = tmp
 
     hint_list = ['' for _ in sql_queries]
-    if hints is not None:
-        if hints == 'random':
-            hint_list = [gen_optimizer_hint_variant(random.randrange(no_variants)) for _ in sql_queries]
-
-        elif hints == 'all':
-            hint_list = [gen_optimizer_hint_variant(i) for i in range(no_variants) for _ in sql_queries]
-            sql_queries = [sql_q for i in range(no_variants) for sql_q in sql_queries]
-
-        else:
-            with open(hints) as f:
-                content = f.readlines()
-            hint_list = [x.strip() for x in content]
+    assert hints is None
+    # if hints is not None:
+    #     if hints == 'random':
+    #         hint_list = [gen_optimizer_hint_variant(random.randrange(no_variants)) for _ in sql_queries]
+    #
+    #     elif hints == 'all':
+    #         hint_list = [gen_optimizer_hint_variant(i) for i in range(no_variants) for _ in sql_queries]
+    #         sql_queries = [sql_q for i in range(no_variants) for sql_q in sql_queries]
+    #
+    #     else:
+    #         with open(hints) as f:
+    #             content = f.readlines()
+    #         hint_list = [x.strip() for x in content]
     assert len(hint_list) == len(sql_queries)
 
     print(f'Vacuuming database {db_name}')
@@ -204,7 +209,7 @@ def run_pg_workload(workload_path, database, db_name, database_conn_args, databa
 
         hint = hint_list[i]
 
-        if pullup_udf and database == DatabaseSystem.DUCKDB:
+        if (pullup_udf or pullup_udf_intermed) and database == DatabaseSystem.DUCKDB:
             dbms_wrapper.submit_query('set disabled_optimizers = \'filter_pushdown\';')
 
         curr_statistics = dbms_wrapper.run_query_collect_statistics(sql_query, repetitions=repetitions_per_query,

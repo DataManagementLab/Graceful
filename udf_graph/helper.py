@@ -205,26 +205,33 @@ def join_cond_to_sql(join_cond: JoinCond) -> str:
 
 
 def reconstruct_table_name(column_name: str, table_names: List[str], database_statistics: Dict,
-                           allow_none_return: bool = False) -> str:
+                           allow_none_return: bool = False) -> Tuple[str,str]:
     # reconstruct table name
     table_matches = []
+    col_name = None
     if isinstance(database_statistics, dict):
         for entry in database_statistics['column_stats']:
             if column_name == entry['column_name'] and entry['table_name'] in table_names:
                 table_matches.append(entry['table_name'])
+            elif column_name == f'{entry["table_name"]}_{entry["column_name"]}' and entry['table_name'] in table_names:
+                table_matches.append(entry['table_name'])
+                col_name = entry['column_name'] # this is unique
     else:
         for entry in database_statistics.column_stats:
             if column_name == entry.column_name and entry.table_name in table_names:
                 table_matches.append(entry.table_name)
+            elif column_name == f'{entry.table_name}_{entry.column_name}' and entry.table_name in table_names:
+                table_matches.append(entry.table_name)
+                col_name = entry.column_name # this is unique
 
     if len(table_matches) == 0 and allow_none_return:
-        return None
+        return None, col_name
 
     assert len(
         table_matches) >= 1, f"Could not find table for column {column_name}: {table_matches} \n{table_names}\n{database_statistics}"
 
     # it can also happen that the column name is not unique and multiple table candidates are found.
-    return table_matches[0]
+    return table_matches[0], col_name
 
 
 def parse_join_condition(join_condition: str, left_tables: List[str], right_tables: List[str],
@@ -250,19 +257,26 @@ def parse_join_condition(join_condition: str, left_tables: List[str], right_tabl
         column1 = left_split[1]
     else:
         # reconstruct table name
-        table1 = reconstruct_table_name(left, left_tables, database_statistics,
+        table1, col = reconstruct_table_name(left, left_tables, database_statistics,
                                         allow_none_return=schema_relationships is not None)
 
-        column1 = left
+        if col is not None:
+            column1 = col # the column name contains the table name as prefix (for intermed positioning) table_col
+        else:
+            column1 = left
 
     if len(right_split) == 2:
         table2 = right_split[0]
         column2 = right_split[1]
     else:
         # reconstruct table name
-        table2 = reconstruct_table_name(right, right_tables, database_statistics,
+        table2,col = reconstruct_table_name(right, right_tables, database_statistics,
                                         allow_none_return=schema_relationships is not None)
-        column2 = right
+
+        if col is not None:
+            column2 = col
+        else:
+            column2 = right
 
     if table1 is None or table2 is None:
         # try to reconstruct from schema relationships

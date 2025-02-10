@@ -35,6 +35,7 @@ if __name__ == '__main__':
     parser.add_argument('--udf_load_path', default=None, type=str)
     parser.add_argument('--udf_drop_path', default=None, type=str)
     parser.add_argument('--pullup_udf', action='store_true')
+    parser.add_argument('--pullup_udf_intermed', action='store_true')
 
     args = parser.parse_args()
 
@@ -48,4 +49,4 @@ if __name__ == '__main__':
                      args.target, args.run_kwargs_dict, args.repetitions_per_query, args.query_timeout,
                      udf_load_path=args.udf_load_path, udf_drop_path=args.udf_drop_path,
                      with_indexes=args.with_indexes, cap_workload=args.cap_workload, min_runtime=args.min_query_ms,
-                     pullup_udf=args.pullup_udf)
+                     pullup_udf=args.pullup_udf, pullup_udf_intermed = args.pullup_udf_intermed)

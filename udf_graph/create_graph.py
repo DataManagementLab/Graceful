@@ -10,13 +10,13 @@ import gast
 import networkx as nx
 import numpy as np
 import pandas as pd
-from deepdb.inference import DeepDBEstimator
 from python_graphs import control_flow
 from python_graphs.control_flow import ControlFlowGraph, ControlFlowNode, BasicBlock
 from tqdm import tqdm
 
 from cross_db_benchmark.benchmark_tools.augment_deepdb_card import report_stats
 from cross_db_benchmark.benchmark_tools.utils import load_schema_json
+from deepdb.inference import DeepDBEstimator
 from udf_graph.annotate_graph_info import enhanceUDFgraph_query, enhanceUDFgraph_card
 from udf_graph.dbms_wrapper import DBMSWrapper
 from udf_graph.helper import extract_from_Compare, extract_from_BinOp, extract_from_AssignExpr, extract_from_BoolOp, \
@@ -585,6 +585,7 @@ def getUDFgraph(CFgraph: ControlFlowGraph, source_code: str, is_duckdb: bool,
 
 def load_parsed_plan(*, func_name, table_name, code_dict: Dict[str, List[str]], graph_location, sql_query: str, db_name,
                      dbms_wrapper: DBMSWrapper, graph_kwargs: Dict, card_est_assume_lazy_eval: bool, pullup_udf: bool,
+                     udf_intermed_pos: bool,
                      query_plan: Dict, database_statistics: Dict, deepdb_estimator: Optional[DeepDBEstimator],
                      est_stats: List[Dict], duckdb_kwargs: Dict, schema_relationships: Dict, skip_wj: bool = False):
     """
@@ -654,6 +655,7 @@ def load_parsed_plan(*, func_name, table_name, code_dict: Dict[str, List[str]], 
                                                                    schema_relationships=schema_relationships,
                                                                    card_est_assume_lazy_eval=card_est_assume_lazy_eval,
                                                                    pullup_udf=pullup_udf,
+                                                                   udf_intermed_pos=udf_intermed_pos,
                                                                    query_plan=query_plan,
                                                                    database_statistics=database_statistics,
                                                                    deepdb_estimator=deepdb_estimator,
@@ -690,7 +692,8 @@ def load_parsed_plan(*, func_name, table_name, code_dict: Dict[str, List[str]], 
 
 def prepareGraphs(*, code_location, graph_location, exp_folder, func_tab_map, db_name,
                   dbms_wrapper: DBMSWrapper, duckdb_kwargs: Dict, graph_kwargs: Dict, card_est_assume_lazy_eval: bool,
-                  pullup_udf: bool, skip_wj: bool = False, deepdb_rel_ensemble_location: str = None,
+                  pullup_udf: bool, udf_intermed_pos: bool, skip_wj: bool = False,
+                  deepdb_rel_ensemble_location: str = None,
                   deepdb_single_ensemble_location: str = None):
     print(
         f"Preparing graphs for {db_name}: code_location={code_location}, graph_location={graph_location}, "
@@ -769,6 +772,7 @@ def prepareGraphs(*, code_location, graph_location, exp_folder, func_tab_map, db
                                                                                      graph_kwargs=graph_kwargs,
                                                                                      card_est_assume_lazy_eval=card_est_assume_lazy_eval,
                                                                                      pullup_udf=pullup_udf,
+                                                                                     udf_intermed_pos=udf_intermed_pos,
                                                                                      query_plan=plan,
                                                                                      deepdb_estimator=deepdb_estimator,
                                                                                      database_statistics=database_statistics,
