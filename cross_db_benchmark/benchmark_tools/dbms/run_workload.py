@@ -14,7 +14,7 @@ from tqdm import tqdm
 
 from cross_db_benchmark.benchmark_tools.database import DatabaseSystem
 from cross_db_benchmark.benchmark_tools.load_database import create_db_conn
-from cross_db_benchmark.benchmark_tools.postgres.check_valid import check_valid
+from cross_db_benchmark.benchmark_tools.dbms.check_valid import check_valid
 from cross_db_benchmark.benchmark_tools.utils import load_json, pullup_udf_in_sql, rewrite_query_to_schema
 from utils.utils import t_print
 

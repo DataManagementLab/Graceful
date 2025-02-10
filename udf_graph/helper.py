@@ -4,7 +4,7 @@ import gast
 from deepdb.inference import FilterCond
 
 from cross_db_benchmark.benchmark_tools.generate_workload import LogicalOperator
-from cross_db_benchmark.benchmark_tools.postgres.parse_filter import PredicateNode
+from cross_db_benchmark.benchmark_tools.dbms.parse_filter import PredicateNode
 
 
 def extract_from_BinOp(ast_subtree, alias2lib_map, func2lib_map, libnames):

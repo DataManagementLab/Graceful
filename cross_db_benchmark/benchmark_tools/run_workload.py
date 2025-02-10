@@ -1,5 +1,5 @@
 from cross_db_benchmark.benchmark_tools.database import DatabaseSystem
-from cross_db_benchmark.benchmark_tools.postgres.run_workload import run_pg_workload
+from cross_db_benchmark.benchmark_tools.dbms.run_workload import run_pg_workload
 
 
 def run_workload(workload_path, database, db_name, database_conn_args, database_kwarg_dict, target_path, run_kwargs,

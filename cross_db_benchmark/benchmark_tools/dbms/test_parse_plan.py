@@ -3,8 +3,8 @@ import unittest
 from types import SimpleNamespace
 
 from cross_db_benchmark.benchmark_tools.generate_workload import Operator, LogicalOperator
-from cross_db_benchmark.benchmark_tools.postgres.parse_filter import parse_filter, PredicateNode
-from cross_db_benchmark.benchmark_tools.postgres.parse_plan import parse_plans
+from cross_db_benchmark.benchmark_tools.dbms.parse_filter import parse_filter, PredicateNode
+from cross_db_benchmark.benchmark_tools.dbms.parse_plan import parse_plans
 
 
 class TestParsePlan(unittest.TestCase):

@@ -1,6 +1,6 @@
 from cross_db_benchmark.benchmark_tools.database import DatabaseSystem
 from cross_db_benchmark.benchmark_tools.duckdb_connection import DuckdbDatabaseConnection
-from cross_db_benchmark.benchmark_tools.postgres.database_connection import PostgresDatabaseConnection
+from cross_db_benchmark.benchmark_tools.dbms.database_connection import PostgresDatabaseConnection
 
 
 def create_db_conn(database, db_name, database_conn_args, database_kwarg_dict):

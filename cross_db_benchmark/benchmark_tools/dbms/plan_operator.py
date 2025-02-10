@@ -2,8 +2,8 @@ import math
 import re
 
 from cross_db_benchmark.benchmark_tools.generate_workload import Aggregator, ExtendedAggregator, LogicalOperator
-from cross_db_benchmark.benchmark_tools.postgres.parse_filter import parse_filter, PredicateNode
-from cross_db_benchmark.benchmark_tools.postgres.utils import child_prod
+from cross_db_benchmark.benchmark_tools.dbms.parse_filter import parse_filter, PredicateNode
+from cross_db_benchmark.benchmark_tools.dbms.utils import child_prod
 
 estimated_regex = re.compile(
     '\(cost=(?P<est_startup_cost>\d+.\d+)..(?P<est_cost>\d+.\d+) rows=(?P<est_card>\d+) width=(?P<est_width>\d+)\)')

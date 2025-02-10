@@ -1,7 +1,7 @@
 import unittest
 
 from cross_db_benchmark.benchmark_tools.generate_workload import LogicalOperator, Operator
-from cross_db_benchmark.benchmark_tools.postgres.parse_filter import parse_filter, PredicateNode
+from cross_db_benchmark.benchmark_tools.dbms.parse_filter import parse_filter, PredicateNode
 
 
 class ParseFilterTest(unittest.TestCase):

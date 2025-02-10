@@ -9,9 +9,9 @@ from cross_db_benchmark.benchmark_tools.annotate_cards_for_udf_sels import annot
 from cross_db_benchmark.benchmark_tools.augment_deepdb_card import annotate_deepdb_card
 from cross_db_benchmark.benchmark_tools.augment_wanderjon_card import annotate_wanderjoin_card
 from cross_db_benchmark.benchmark_tools.database import DatabaseSystem
-from cross_db_benchmark.benchmark_tools.postgres.combine_plans import combine_traces, combine_dd_traces
-from cross_db_benchmark.benchmark_tools.postgres.parse_dd_plan import parse_dd_plans
-from cross_db_benchmark.benchmark_tools.postgres.parse_plan import parse_plans
+from cross_db_benchmark.benchmark_tools.dbms.combine_plans import combine_traces, combine_dd_traces
+from cross_db_benchmark.benchmark_tools.dbms.parse_dd_plan import parse_dd_plans
+from cross_db_benchmark.benchmark_tools.dbms.parse_plan import parse_plans
 from cross_db_benchmark.benchmark_tools.utils import load_json, load_schema_json
 
 

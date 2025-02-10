@@ -3,9 +3,9 @@ import unittest
 from types import SimpleNamespace
 
 from cross_db_benchmark.benchmark_tools.generate_workload import Operator, LogicalOperator
-from cross_db_benchmark.benchmark_tools.postgres.parse_dd_plan import parse_plan_recursively, parse_output_columns, \
+from cross_db_benchmark.benchmark_tools.dbms.parse_dd_plan import parse_plan_recursively, parse_output_columns, \
     remove_cast_nesting
-from cross_db_benchmark.benchmark_tools.postgres.parse_filter import PredicateNode
+from cross_db_benchmark.benchmark_tools.dbms.parse_filter import PredicateNode
 
 table_id_mapping = {'oseba': 0, 'nesreca': 1, 'part': 2, 'regular_season_detailed_results': 3, 'team_name': 4,
                     'teams': 5, 'orders': 6, 'account': 7, 'loan': 8, 'district': 9, 'lineitem': 10,

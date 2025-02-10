@@ -6,9 +6,9 @@ import numpy as np
 from tqdm import tqdm
 
 from cross_db_benchmark.benchmark_tools.generate_workload import LogicalOperator
-from cross_db_benchmark.benchmark_tools.postgres.parse_dd_plan import extract_udf_stats
-from cross_db_benchmark.benchmark_tools.postgres.plan_operator import PlanOperator
-from cross_db_benchmark.benchmark_tools.postgres.utils import plan_statistics
+from cross_db_benchmark.benchmark_tools.dbms.parse_dd_plan import extract_udf_stats
+from cross_db_benchmark.benchmark_tools.dbms.plan_operator import PlanOperator
+from cross_db_benchmark.benchmark_tools.dbms.utils import plan_statistics
 
 planning_time_regex = re.compile('planning time: (?P<planning_time>\d+.\d+) ms')
 ex_time_regex = re.compile('execution time: (?P<execution_time>\d+.\d+) ms')

@@ -8,9 +8,9 @@ import numpy as np
 from tqdm import tqdm
 
 from cross_db_benchmark.benchmark_tools.generate_workload import Aggregator, ExtendedAggregator
-from cross_db_benchmark.benchmark_tools.postgres.parse_filter import parse_filter, PredicateNode, \
+from cross_db_benchmark.benchmark_tools.dbms.parse_filter import parse_filter, PredicateNode, \
     NodeOpNotRecognizedException, FilterParsingError
-from cross_db_benchmark.benchmark_tools.postgres.utils import plan_statistics, remove_cast_nesting, \
+from cross_db_benchmark.benchmark_tools.dbms.utils import plan_statistics, remove_cast_nesting, \
     extract_udf_params_from_str
 
 

@@ -3,8 +3,8 @@ import traceback
 from types import SimpleNamespace
 
 from cross_db_benchmark.benchmark_tools.database import DatabaseSystem
-from cross_db_benchmark.benchmark_tools.postgres.parse_dd_plan import parse_plan_recursively, ZeroCardFoundError
-from cross_db_benchmark.benchmark_tools.postgres.parse_plan import parse_plan
+from cross_db_benchmark.benchmark_tools.dbms.parse_dd_plan import parse_plan_recursively, ZeroCardFoundError
+from cross_db_benchmark.benchmark_tools.dbms.parse_plan import parse_plan
 from utils.utils import t_print
 
 

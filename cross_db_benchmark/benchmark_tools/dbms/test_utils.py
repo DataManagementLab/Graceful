@@ -1,6 +1,6 @@
 import unittest
 
-from cross_db_benchmark.benchmark_tools.postgres.utils import remove_cast_nesting
+from cross_db_benchmark.benchmark_tools.dbms.utils import remove_cast_nesting
 
 
 class UtilsTest(unittest.TestCase):

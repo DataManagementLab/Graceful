@@ -3,7 +3,7 @@ import os
 
 from cross_db_benchmark.benchmark_tools.database import DatabaseSystem
 from cross_db_benchmark.benchmark_tools.parse_run import dumper
-from cross_db_benchmark.benchmark_tools.postgres.inflate_cardinality_errors import inflate_card_errors_pg
+from cross_db_benchmark.benchmark_tools.dbms.inflate_cardinality_errors import inflate_card_errors_pg
 from cross_db_benchmark.benchmark_tools.utils import load_json
 
 

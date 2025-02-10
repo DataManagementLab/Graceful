@@ -9,7 +9,7 @@ from deepdb.inference import FilterCond, DeepDBEstimator
 
 from card_est.run_wanderjoin import get_wj_card_est
 from cross_db_benchmark.benchmark_tools.generate_workload import negate_op
-from cross_db_benchmark.benchmark_tools.postgres.parse_filter import parse_filter
+from cross_db_benchmark.benchmark_tools.dbms.parse_filter import parse_filter
 from udf_graph.dbms_wrapper import DBMSWrapper
 from udf_graph.helper import extract_filter_join_conds_below_udf_from_plan, JoinCond, join_cond_to_sql
 from udf_graph.utils import extract_where_conditions, q_err

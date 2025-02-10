@@ -2,7 +2,7 @@ from typing import List
 
 from deepdb.inference import FilterCond
 
-from cross_db_benchmark.benchmark_tools.postgres.parse_filter import parse_filter
+from cross_db_benchmark.benchmark_tools.dbms.parse_filter import parse_filter
 
 
 def q_err(cardinality_predict, cardinality_true):
