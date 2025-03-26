@@ -26,29 +26,38 @@ def encode(column, plan_params, feature_statistics, est_card_udf_sel: Optional[i
     # this allows to pretrain a model (e.g. on actual cardinalities) and during inference test different cardinality estimators.
     orig_name = column
 
+    if column.endswith('_card'):
+        # extract position if it is a card column
+        assert 'above_udf_filter' in plan_params, f'{plan_params}'
+        above_udf_filter = plan_params['above_udf_filter']
+        is_udf_filter = plan_params['is_udf_filter']
+    else:
+        above_udf_filter = False
+        is_udf_filter = False
+
     if column.endswith('_card') or column.endswith('_children_card'):
         assert card_type_below_udf is not None or card_type_above_udf is not None, f'{column} / {card_type_below_udf} / {card_type_above_udf}'
 
         # use a different cardinality column if we are above a UDF
-        if plan_params['above_udf_filter'] or plan_params['is_udf_filter']:
+        if above_udf_filter or is_udf_filter:
             if column.endswith('_card') and not column.endswith('_children_card'):
                 column = card_type_above_udf
             elif column.endswith('_children_card'):
                 column = card_type_above_udf.replace('_card', '_children_card')
                 assert column.endswith('_children_card')
             else:
-                raise Exception(f'Unexpected case: {plan_params["above_udf_filter"]} / {plan_params["is_udf_filter"]}')
+                raise Exception(f'Unexpected case: {above_udf_filter} / {is_udf_filter}')
 
-        elif not plan_params['above_udf_filter'] and not plan_params['is_udf_filter']:
+        elif not above_udf_filter and not is_udf_filter:
             if column.endswith('_card') and not column.endswith('_children_card'):
                 column = card_type_below_udf
             elif column.endswith('_children_card'):
                 column = card_type_above_udf.replace('_card', '_children_card')
                 assert column.endswith('_children_card')
             else:
-                raise Exception(f'Unexpected case: {plan_params["above_udf_filter"]} / {plan_params["is_udf_filter"]}')
+                raise Exception(f'Unexpected case: {above_udf_filter} / {is_udf_filter}')
         else:
-            raise Exception(f'Unexpected case: {plan_params["above_udf_filter"]} / {plan_params["is_udf_filter"]}')
+            raise Exception(f'Unexpected case: {above_udf_filter} / {is_udf_filter}')
 
     #  fallback in case actual cardinality is not in plan parameters
     if column == 'act_card' and column not in plan_params:
@@ -58,11 +67,11 @@ def encode(column, plan_params, feature_statistics, est_card_udf_sel: Optional[i
 
     if column.endswith('_card') and not column.endswith('_children_card'):
         # apply assumed udf filter selectivity
-        if (plan_params['above_udf_filter'] or plan_params['is_udf_filter']) and est_card_udf_sel is not None:
+        if (above_udf_filter or is_udf_filter) and est_card_udf_sel is not None:
             value = value * est_card_udf_sel / 100
     elif column.endswith('_children_card'):
         # apply assumed udf filter selectivity
-        if plan_params['above_udf_filter'] and not plan_params['is_udf_filter'] and est_card_udf_sel is not None:
+        if above_udf_filter and not is_udf_filter and est_card_udf_sel is not None:
             value = value * est_card_udf_sel / 100
 
     # encode value
@@ -71,7 +80,7 @@ def encode(column, plan_params, feature_statistics, est_card_udf_sel: Optional[i
     elif feature_statistics[orig_name].get('type') == str(FeatureType.categorical):
         value_dict = feature_statistics[orig_name]['value_dict']
         try:
-            enc_value = value_dict[str(value)]
+            enc_value = value_dict[str(value).strip()]
         except KeyError as e:
             raise Exception(f"Could not find {value} in {value_dict} / {orig_name}")
     else:

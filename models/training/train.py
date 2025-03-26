@@ -1,6 +1,7 @@
+import functools
 import os
 import time
-from copy import copy
+from copy import copy, deepcopy
 from typing import Dict, List, Tuple, Any
 
 import dgl
@@ -39,7 +40,8 @@ def train_epoch(epoch_stats, train_loader, model, optimizer, max_epoch_tuples, c
         if max_epoch_tuples is not None and batch_idx * train_loader.batch_size > max_epoch_tuples:
             break
 
-        input_model, label, stats, sample_idxs, udf_graph_bitmask = custom_batch_to(batch, model.device, model.label_norm)
+        input_model, label, stats, sample_idxs, udf_graph_bitmask = custom_batch_to(batch, model.device,
+                                                                                    model.label_norm)
 
         # print(input_model[0])
         # print(input_model[1])
@@ -130,7 +132,8 @@ def train_epoch(epoch_stats, train_loader, model, optimizer, max_epoch_tuples, c
 
 
 def run_inference(data_loader: torch.utils.data.DataLoader, model: torch.nn.Module, max_epoch_tuples: int,
-                  separate_sql_udf_graphs: bool, flat_vector_udf_est:bool, custom_batch_to=batch_to, pt_profile: bool = False):
+                  separate_sql_udf_graphs: bool, flat_vector_udf_est: bool, custom_batch_to=batch_to,
+                  pt_profile: bool = False, separate_udf_model: torch.nn.Module = None):
     if pt_profile:
         # setup pytorch profiler with tensorboard
         prof = torch.profiler.profile(
@@ -142,6 +145,10 @@ def run_inference(data_loader: torch.utils.data.DataLoader, model: torch.nn.Modu
         prof = None
 
     model.eval()
+
+    if separate_udf_model is not None:
+        separate_udf_model.eval()
+
     with torch.autograd.no_grad():
         val_loss = torch.Tensor([0])
         labels = []
@@ -185,6 +192,30 @@ def run_inference(data_loader: torch.utils.data.DataLoader, model: torch.nn.Modu
             # run inference and measure latency
             start_t = time.time()
             out = model(input_model)
+
+            if separate_udf_model is not None:
+                # route all instances also to the UDF model - this is a hacky implementation:
+                # all items will be processed by both models, and only in the output we do the splitting
+                # otherwise separate dataloaders / ... would be necessary
+                udf_model_out = separate_udf_model(input_model)
+
+                # overwrite the output with the udf model output
+                assert not model.return_graph_repr and not model.return_udf_repr
+                output, feat_dict = out
+                udf_output, udf_feat_dict = udf_model_out
+
+                assert output.shape == udf_output.shape, f'{output.shape} vs {udf_output.shape}'
+
+                # convert bitmask to tensor
+                udf_graph_bitmask_tensor = torch.as_tensor(udf_graph_bitmask, device=udf_output.device)
+                udf_graph_bitmask_tensor = udf_graph_bitmask_tensor.reshape(-1, 1)  # reshape to column vector
+
+                # combine the outputs
+                combined_output = torch.where(udf_graph_bitmask_tensor, udf_output, output)
+
+                # overwrite the out variable
+                out = combined_output, feat_dict
+
             end_t = time.time()
             if prof is not None:
                 prof.step()
@@ -217,12 +248,11 @@ def run_inference(data_loader: torch.utils.data.DataLoader, model: torch.nn.Modu
                     flat_vector_preds = stats['flat_vector_predictions']
 
                     # convert to s, cap at 0
-                    flat_vector_preds = [max(0,x)/1000 for x in flat_vector_preds]
-
+                    flat_vector_preds = [max(0, x) / 1000 for x in flat_vector_preds]
 
                     # apply normalization
-                    if model.label_norm is not None and len(flat_vector_preds)>0:
-                        flat_vector_preds =[[x] for x in flat_vector_preds]
+                    if model.label_norm is not None and len(flat_vector_preds) > 0:
+                        flat_vector_preds = [[x] for x in flat_vector_preds]
                         flat_vector_preds = model.label_norm.transform(flat_vector_preds)
 
                 # print(f'udf preds: {stats["flat_vector_predictions"][:10]}, graph preds: {output.cpu().numpy()[:10]}, labels: {label.cpu().numpy()[:10]}', flush=True)
@@ -233,7 +263,7 @@ def run_inference(data_loader: torch.utils.data.DataLoader, model: torch.nn.Modu
                         # add to previous value
                         if flat_vector_udf_est:
                             # use flat vector prediction
-                            flat_vector_pred = flat_vector_preds[udf_nr] # cap negative values and convert to s
+                            flat_vector_pred = flat_vector_preds[udf_nr]  # cap negative values and convert to s
                             new_output[-1] += flat_vector_pred
                             udf_nr += 1
                         else:
@@ -360,12 +390,12 @@ def validate_model(data_loader, model, validate_stats: Dict, epoch=0, metrics=No
                    verbose=False, log_all_queries=False, extended_evaluation: bool = False,
                    prefix: str = None, is_test_loader: bool = False, log_to_wandb: bool = True,
                    separate_sql_udf_graphs: bool = False,
-                   flat_vector_udf_est: bool = False) -> \
+                   flat_vector_udf_est: bool = False, separate_udf_model: torch.nn.Module = None) -> \
         Tuple[bool, Dict, np.ndarray, np.ndarray, np.ndarray, np.ndarray, Dict]:
     # run inference
     labels, preds, graph_reprs, udf_reprs, sample_idxs, val_num_tuples, test_start_t, val_loss, stats, inference_latencies_ms = run_inference(
         data_loader, model, separate_sql_udf_graphs=separate_sql_udf_graphs, max_epoch_tuples=max_epoch_tuples,
-        flat_vector_udf_est=flat_vector_udf_est)
+        flat_vector_udf_est=flat_vector_udf_est, separate_udf_model=separate_udf_model)
 
     validate_stats[f'{prefix}_time'] = time.perf_counter() - test_start_t
     validate_stats[f'{prefix}_num_tuples'] = val_num_tuples
@@ -528,7 +558,11 @@ def train_model(workload_runs,
                 include_no_udf_data: bool = False, test_with_count_edges_msg_aggr: bool = False,
                 min_runtime_ms: int = 100, skip_udf: bool = False, filter_plans: Dict[str, int] = None,
                 separate_sql_udf_graphs: bool = False, flat_vector_udf_est: bool = False,
-                flat_vector_model_path: str = None):
+                flat_vector_model_path: str = None,
+                separate_udf_model:bool=False,
+                udf_only_pretrained_model_artifact_dir: str = None,
+                udf_only_pretrained_model_filename: str = None,
+                ):
     if model_kwargs is None:
         model_kwargs = dict()
 
@@ -556,7 +590,7 @@ def train_model(workload_runs,
                           card_type_in_udf=card_type, card_type_above_udf=card_type, card_type_below_udf=card_type,
                           plans_have_no_udf=plans_have_no_udf,
                           stratification_prioritize_loops=stratification_prioritize_loops, skip_udf=skip_udf,
-                          filter_plans=filter_plans, separate_sql_udf_graphs=separate_sql_udf_graphs,
+                          filter_plans=filter_plans, separate_sql_udf_graphs=separate_sql_udf_graphs or separate_udf_model,
                           annotate_flat_vector_udf_preds=flat_vector_udf_est,
                           flat_vector_model_path=flat_vector_model_path)
 
@@ -575,19 +609,21 @@ def train_model(workload_runs,
         raise ValueError(f'Unknown loss class {loss_class_name}')
 
     # create zero shot model dependent on database
-    model = zero_shot_models[database](device=device, final_mlp_kwargs=final_mlp_kwargs,
-                                       node_type_kwargs=node_type_kwargs, output_dim=output_dim,
-                                       feature_statistics=feature_statistics,
-                                       tree_layer_kwargs=tree_layer_kwargs,
-                                       featurization=featurization,
-                                       label_norm=label_norm, mp_ignore_udf=mp_ignore_udf,
-                                       return_graph_repr=apply_pca_evaluation,
-                                       return_udf_repr=apply_pca_evaluation and not plans_have_no_udf and not include_no_udf_data,
-                                       plans_have_no_udf=plans_have_no_udf,
-                                       train_udf_graph_against_udf_runtime=train_udf_graph_against_udf_runtime,
-                                       work_with_udf_repr=work_with_udf_repr,
-                                       test_with_count_edges_msg_aggr=test_with_count_edges_msg_aggr,
-                                       **model_kwargs)
+    gen_model = functools.partial(zero_shot_models[database], device=device, final_mlp_kwargs=final_mlp_kwargs,
+                                  node_type_kwargs=node_type_kwargs, output_dim=output_dim,
+                                  feature_statistics=feature_statistics,
+                                  tree_layer_kwargs=tree_layer_kwargs,
+                                  featurization=featurization,
+                                  label_norm=label_norm, mp_ignore_udf=mp_ignore_udf,
+                                  return_graph_repr=apply_pca_evaluation,
+                                  return_udf_repr=apply_pca_evaluation and not plans_have_no_udf and not include_no_udf_data,
+                                  plans_have_no_udf=plans_have_no_udf,
+                                  train_udf_graph_against_udf_runtime=train_udf_graph_against_udf_runtime,
+                                  work_with_udf_repr=work_with_udf_repr,
+                                  test_with_count_edges_msg_aggr=test_with_count_edges_msg_aggr,
+                                  **model_kwargs)
+    model = gen_model()
+
     # move to gpu
     model = model.to(model.device)
     # print(model)
@@ -608,6 +644,21 @@ def train_model(workload_runs,
         csv_stats, epochs_wo_improvement, epoch, model, optimizer, lr_scheduler, metrics, finished = \
             load_checkpoint(model, target_dir, filename_model, optimizer=optimizer, lr_scheduler=lr_scheduler,
                             metrics=metrics, filetype='.pt', zs_paper_model=zs_paper_dataset)
+
+    if separate_udf_model and udf_only_pretrained_model_artifact_dir is not None and udf_only_pretrained_model_filename is not None:
+        # instantiate a udf only model
+        udf_model = gen_model()
+        udf_model_metrics = deepcopy(metrics)
+
+        _, _, udf_model_epoch, udf_model, _, _, udf_model_metrics, udf_model_finished = \
+            load_checkpoint(udf_model, udf_only_pretrained_model_artifact_dir, udf_only_pretrained_model_filename,
+                            optimizer=optimizer, lr_scheduler=lr_scheduler, metrics=udf_model_metrics, filetype='.pt',
+                            zs_paper_model=zs_paper_dataset)
+
+        assert udf_model_finished, f'UDF only model {udf_only_pretrained_model_filename} is not finished'
+    else:
+        udf_model = None
+        udf_model_metrics = None
 
     if test_only:
         assert epoch > 0
@@ -702,7 +753,16 @@ def train_model(workload_runs,
         best_model_state = translate_zs_paper_model_state_dict(early_stop_m.best_model)
     model.load_state_dict(best_model_state)
 
-    # apply_pca_evaluation = False
+    if udf_model is not None:
+        print("Load best udf model")
+        udf_model_early_stop_m = find_early_stopping_metric(udf_model_metrics)
+        udf_model_best_model_state = udf_model_early_stop_m.best_model
+        if zs_paper_dataset:
+            udf_model_best_model_state = translate_zs_paper_model_state_dict(udf_model_early_stop_m.best_model)
+        udf_model.load_state_dict(udf_model_best_model_state)
+
+        # move to gpu
+        udf_model = udf_model.to(udf_model.device)
 
     # evaluate test set
     if test_loaders is not None:
@@ -714,10 +774,10 @@ def train_model(workload_runs,
             if apply_pca_evaluation:
                 print(f'Running inference for train and val set to perform PCA analysis')
                 train_labels, train_preds, train_graph_reprs, train_udf_reprs, _, _, _, _, train_query_stats, inference_latencies_ms = run_inference(
-                    train_loader, model, max_epoch_tuples=5000, separate_sql_udf_graphs=separate_sql_udf_graphs,
+                    train_loader, model, max_epoch_tuples=5000, separate_sql_udf_graphs=separate_sql_udf_graphs or separate_udf_model,separate_udf_model=udf_model,
                     flat_vector_udf_est=flat_vector_udf_est)
                 val_labels, val_preds, val_graph_reprs, val_udf_reprs, _, _, _, _, val_query_stats, inference_latencies_ms = run_inference(
-                    val_loader, model, max_epoch_tuples=5000, separate_sql_udf_graphs=separate_sql_udf_graphs,
+                    val_loader, model, max_epoch_tuples=5000, separate_sql_udf_graphs=separate_sql_udf_graphs or separate_udf_model, separate_udf_model=udf_model,
                     flat_vector_udf_est=flat_vector_udf_est)
 
             else:
@@ -763,7 +823,7 @@ def train_model(workload_runs,
                                       card_type_below_udf=card, skip_udf=skip_udf,
                                       stratification_prioritize_loops=stratification_prioritize_loops,
                                       plans_have_no_udf=plans_have_no_udf, filter_plans=filter_plans,
-                                      separate_sql_udf_graphs=separate_sql_udf_graphs,
+                                      separate_sql_udf_graphs=separate_sql_udf_graphs or separate_udf_model,
                                       annotate_flat_vector_udf_preds=flat_vector_udf_est,
                                       flat_vector_model_path=flat_vector_model_path)
 
@@ -787,8 +847,9 @@ def train_model(workload_runs,
                             extended_evaluation=True,
                             prefix=f'test_{test_workload_name}',
                             is_test_loader=True, log_to_wandb=register_at_wandb,
-                            separate_sql_udf_graphs=separate_sql_udf_graphs,
-                            flat_vector_udf_est=flat_vector_udf_est
+                            separate_sql_udf_graphs=separate_sql_udf_graphs or separate_udf_model,
+                            flat_vector_udf_est=flat_vector_udf_est,
+                            separate_udf_model=udf_model
                         )
                     except KeyError as e:
                         print(e)
@@ -889,7 +950,8 @@ def train_epoch_fn(epoch: int, train_loader: torch.utils.data.DataLoader,
         metrics=metrics,
         max_epoch_tuples=max_epoch_tuples,
         prefix='val',
-        log_to_wandb=register_at_wandb, separate_sql_udf_graphs=separate_sql_udf_graphs, flat_vector_udf_est=flat_vector_udf_est)
+        log_to_wandb=register_at_wandb, separate_sql_udf_graphs=separate_sql_udf_graphs,
+        flat_vector_udf_est=flat_vector_udf_est)
     if test_loader is not None and valtest:
         _, valtest_wandb_plots, valtest_graph_reprs, valtest_udf_reprs, valtest_labels, valtest_preds, valtest_query_stats = validate_model(
             test_loader, model, epoch=epoch, validate_stats=epoch_stats,

@@ -47,7 +47,7 @@ def run_train(
             # generate filename with wandb
             args_config.update(wandb.config.as_dict())
 
-    print(f'Running with config: {args_config}')
+    print(f'Running with config: {args_config}',flush=True)
 
     config, train_wl_paths, test_wl_paths, statistics_file, model_name = get_config(args_config,
                                                                                     wl_base_path=wl_base_path, )
@@ -162,6 +162,10 @@ if __name__ == '__main__':
 
     parser.add_argument('--pretrained_model_artifact_dir', type=str, default=argparse.SUPPRESS)
     parser.add_argument('--pretrained_model_filename', type=str, default=argparse.SUPPRESS)
+    parser.add_argument('--udf_only_pretrained_model_artifact_dir', type=str, default=argparse.SUPPRESS)
+    parser.add_argument('--udf_only_pretrained_model_filename', type=str, default=argparse.SUPPRESS)
+
+
     parser.add_argument('--card_type', type=str, default=argparse.SUPPRESS)
 
     # filter plans
@@ -236,6 +240,10 @@ if __name__ == '__main__':
         args_config['pretrained_model_artifact_dir'] = args.pretrained_model_artifact_dir
     if hasattr(args, 'pretrained_model_filename'):
         args_config['pretrained_model_filename'] = args.pretrained_model_filename
+    if hasattr(args, 'udf_only_pretrained_model_artifact_dir'):
+        args_config['udf_only_pretrained_model_artifact_dir'] = args.udf_only_pretrained_model_artifact_dir
+    if hasattr(args, 'udf_only_pretrained_model_filename'):
+        args_config['udf_only_pretrained_model_filename'] = args.udf_only_pretrained_model_filename
     if args.train_udf_graph_against_udf_runtime:
         args_config['train_udf_graph_against_udf_runtime'] = args.train_udf_graph_against_udf_runtime
     if args.work_with_udf_repr:

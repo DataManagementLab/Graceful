@@ -119,8 +119,12 @@ def read_workload_runs(workload_run_paths, min_runtime_ms: int, limit_queries=No
             exp_path = os.path.dirname(os.path.dirname(os.path.dirname(source)))
             col_col_stats_path = os.path.join(exp_path, 'dbs', dataset, 'created_graphs',
                                               'udf_w_col_col_comparison.json')
-            with open(col_col_stats_path, 'r') as f:
-                fn_blacklist = json.load(f)
+            if os.path.exists(col_col_stats_path):
+                with open(col_col_stats_path, 'r') as f:
+                    fn_blacklist = json.load(f)
+            else:
+                print(f'No blacklist file found for {col_col_stats_path}',flush=True)
+                continue
 
             filtered_plans = []
             for plan in ds_plans:
@@ -138,7 +142,7 @@ def read_workload_runs(workload_run_paths, min_runtime_ms: int, limit_queries=No
                                      prioritize_loops=stratification_prioritize_loops)
         plans.extend(ds_plans)
 
-    print(f"No of Plans: {len(plans)} (min runtime discards: {min_runtime_discards})")
+    print(f"No of Plans: {len(plans)} (min runtime discards: {min_runtime_discards})",flush=True)
 
     return plans, database_statistics
 

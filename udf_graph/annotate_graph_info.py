@@ -76,7 +76,7 @@ def enhanceUDFgraph_card(graph, table_name, dbms_wrapper: DBMSWrapper, pullup_ud
                          database_statistics: Dict, sql_query: str, est_stats: List[Dict], duckdb_kwargs: Dict,
                          schema_relationships: Dict,
                          deepdb_estimator: DeepDBEstimator = None, card_est_assume_lazy_eval: bool = False,
-                         verbose: bool = False, skip_wj: bool = False):
+                         verbose: bool = False, skip_wj: bool = False, skip_deepdb:bool=False):
     # create materialized view based on the raw query
     # create mv if udf call is input to an aggregate function
     mat_view_name = mat_view_handling(raw_query=sql_query, dbms_wrapper=dbms_wrapper, table_name=table_name,
@@ -203,7 +203,7 @@ def enhanceUDFgraph_card(graph, table_name, dbms_wrapper: DBMSWrapper, pullup_ud
         msg = None
         if len(deepdb_conditions) == 0 and len(deepdb_tables) == 1:
             path_dd_card = path_est_card
-        elif deepdb_estimator is not None:
+        elif deepdb_estimator is not None and not skip_deepdb:
             try:
                 join_conds_str = [join_cond_to_sql(j) for j in join_conds]
                 path_dd_card = deepdb_estimator.estimate_card(

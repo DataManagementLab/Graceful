@@ -28,8 +28,10 @@ config_keywords = {
     'loopedge': 'model',  # add edge between loop and loopend
     'lazy': 'model',  # assume lazy evaluation for cardinality estimation
     'gradntemb': 'model',  # allow gradients on embeddings of node-type encoder
-    'sepsqludfgr':'model', # separate sql and udf graph: sql_cost + udf_cost = total_cost (both with GRACEFUL, but separate)
-    'flatudf':'model' # hybrid baseline: flat vector for udf cost estimation, GRACEFUL for query cost estimation
+    'sepsqludfgr': 'model',
+    # separate sql and udf graph: sql_cost + udf_cost = total_cost (both with GRACEFUL, but separate)
+    'flatudf': 'model',  # hybrid baseline: flat vector for udf cost estimation, GRACEFUL for query cost estimation
+    'sepudfmodel': 'model',  # separate udf model for udf_cost estimation (both with GRACEFUL, but GRACEFUL-udf was trained on a select-only workload
 }
 
 
@@ -49,6 +51,8 @@ def get_config(hyperparams: Dict[str, Any], wl_base_path: str, assemble_filename
     - mp_ignore_udf (bool): whether to ignore UDFs in message passing [default: False]
     - optimizer (str): which optimizer to use [default: AdamW]
     """
+
+    print(f'Hyperparams: {hyperparams}')
 
     model_config = hyperparams.pop('model_config')
 
@@ -132,7 +136,10 @@ def get_config(hyperparams: Dict[str, Any], wl_base_path: str, assemble_filename
             max_num_comp_nodes=None,
         ),
         separate_sql_udf_graphs=False,
-        flat_vector_udf_est=False
+        flat_vector_udf_est=False,
+        separate_udf_model=False,
+        udf_only_pretrained_model_artifact_dir=None,
+        udf_only_pretrained_model_filename=None,
     )
 
     """
@@ -145,7 +152,7 @@ def get_config(hyperparams: Dict[str, Any], wl_base_path: str, assemble_filename
     if 'zs_paper_dataset' in hyperparams:
         config['zs_paper_dataset'] = hyperparams.get('zs_paper_dataset')
 
-    if 'train_on_test' in hyperparams:
+    if 'train_on_test' in hyperparams and hyperparams['train_on_test']:
         config['valtest'] = False
 
     data_wl_str = ''
@@ -171,6 +178,8 @@ def get_config(hyperparams: Dict[str, Any], wl_base_path: str, assemble_filename
         include_intermed_udf_pos_data = hyperparams.pop('include_intermed_udf_pos_data')
         assert include_intermed_udf_pos_data
         data_wl_str += 'intermed'
+    else:
+        include_intermed_udf_pos_data = False
 
     if 'include_pushdown_data' in hyperparams:
         assert hyperparams['include_pushdown_data']
@@ -219,7 +228,7 @@ def get_config(hyperparams: Dict[str, Any], wl_base_path: str, assemble_filename
         batch_size = hyperparams.pop('batch_size')
         config['batch_size'] = batch_size
         model_name += f'_bs{batch_size}'
-    if 'stratify_dataset_by_runtimes' in hyperparams:
+    if 'stratify_dataset_by_runtimes' in hyperparams and hyperparams['stratify_dataset_by_runtimes']:
         config['stratify_dataset_by_runtimes'] = hyperparams.pop('stratify_dataset_by_runtimes')
         model_name += '_stratR'
     if 'stratify_per_database_by_runtimes' in hyperparams and hyperparams['stratify_per_database_by_runtimes']:
@@ -346,6 +355,11 @@ def get_config(hyperparams: Dict[str, Any], wl_base_path: str, assemble_filename
     if 'flat_vector_model_path' in hyperparams:
         config['flat_vector_model_path'] = hyperparams.pop('flat_vector_model_path')
 
+    if 'udf_only_pretrained_model_artifact_dir' in hyperparams:
+        config['udf_only_pretrained_model_artifact_dir'] = hyperparams.pop('udf_only_pretrained_model_artifact_dir')
+    if 'udf_only_pretrained_model_filename' in hyperparams:
+        config['udf_only_pretrained_model_filename'] = hyperparams.pop('udf_only_pretrained_model_filename')
+
     base_featurization = None
     # extract base featurization from model config
     for keyword in model_config.split('_'):
@@ -390,9 +404,11 @@ def get_config(hyperparams: Dict[str, Any], wl_base_path: str, assemble_filename
                 elif keyword == 'gradntemb':
                     node_type_kwargs['allow_gradients_on_embeddings'] = True
                 elif keyword == 'sepsqludfgr':
-                    config['separate_sql_udf_graphs']=True
+                    config['separate_sql_udf_graphs'] = True
                 elif keyword == 'flatudf':
-                    config['flat_vector_udf_est']=True
+                    config['flat_vector_udf_est'] = True
+                elif keyword == 'sepudfmodel':
+                    config['separate_udf_model'] = True
                 else:
                     raise ValueError(f"Unknown keyword {keyword}")
         elif keyword.startswith('graphdim'):
@@ -433,7 +449,7 @@ def get_config(hyperparams: Dict[str, Any], wl_base_path: str, assemble_filename
 def compile_train_test_filenames(hyperparams: Dict, wl_base_path: str, zs_paper_dataset: bool = False,
                                  include_no_udf_data: bool = False, include_no_udf_data_large: bool = False,
                                  include_pushdown_data: bool = True, include_pullup_data: bool = False,
-                                include_intermed_udf_pos_data: bool = False,
+                                 include_intermed_udf_pos_data: bool = False,
                                  include_select_only_w_branch: bool = False):
     # data
     data_keyword = hyperparams.pop('data_keyword')
@@ -453,7 +469,7 @@ def compile_train_test_filenames(hyperparams: Dict, wl_base_path: str, zs_paper_
     model_name_suffix = f'{test_against}'
 
     # train on test dataset
-    if 'train_on_test' in hyperparams:
+    if 'train_on_test' in hyperparams and hyperparams['train_on_test']:
         train_on_test = hyperparams.pop('train_on_test')
         assert train_on_test, train_on_test
         model_name_suffix += '_train_on_test'
@@ -510,7 +526,7 @@ def compile_train_test_filenames(hyperparams: Dict, wl_base_path: str, zs_paper_
             if os.path.exists(path):
                 path_list.append(path)
             else:
-                print(f'No select only with branch data found for {dataset.db_name}')
+                print(f'No select only with branch data found for {dataset.db_name} ({path})')
 
         if dataset.db_name == test_against:
             test_wl_paths.extend(path_list)

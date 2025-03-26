@@ -585,9 +585,9 @@ def getUDFgraph(CFgraph: ControlFlowGraph, source_code: str, is_duckdb: bool,
 
 def load_parsed_plan(*, func_name, table_name, code_dict: Dict[str, List[str]], graph_location, sql_query: str, db_name,
                      dbms_wrapper: DBMSWrapper, graph_kwargs: Dict, card_est_assume_lazy_eval: bool, pullup_udf: bool,
-                     udf_intermed_pos: bool,
-                     query_plan: Dict, database_statistics: Dict, deepdb_estimator: Optional[DeepDBEstimator],
-                     est_stats: List[Dict], duckdb_kwargs: Dict, schema_relationships: Dict, skip_wj: bool = False):
+                     udf_intermed_pos: bool, query_plan: Dict, database_statistics: Dict,
+                     deepdb_estimator: Optional[DeepDBEstimator], est_stats: List[Dict], duckdb_kwargs: Dict,
+                     schema_relationships: Dict, skip_wj: bool = False, skip_deepdb: bool = False):
     """
 
     :param func_name: name of the udf
@@ -660,7 +660,7 @@ def load_parsed_plan(*, func_name, table_name, code_dict: Dict[str, List[str]], 
                                                                    database_statistics=database_statistics,
                                                                    deepdb_estimator=deepdb_estimator,
                                                                    est_stats=est_stats, duckdb_kwargs=duckdb_kwargs,
-                                                                   skip_wj=skip_wj, verbose=False)
+                                                                   skip_wj=skip_wj, verbose=False, skip_deepdb=skip_deepdb)
     t4 = time.time()
 
     suffix = []
@@ -692,7 +692,7 @@ def load_parsed_plan(*, func_name, table_name, code_dict: Dict[str, List[str]], 
 
 def prepareGraphs(*, code_location, graph_location, exp_folder, func_tab_map, db_name,
                   dbms_wrapper: DBMSWrapper, duckdb_kwargs: Dict, graph_kwargs: Dict, card_est_assume_lazy_eval: bool,
-                  pullup_udf: bool, udf_intermed_pos: bool, skip_wj: bool = False,
+                  pullup_udf: bool, udf_intermed_pos: bool, skip_wj: bool = False, skip_deepdb: bool = False,
                   deepdb_rel_ensemble_location: str = None,
                   deepdb_single_ensemble_location: str = None):
     print(
@@ -742,9 +742,12 @@ def prepareGraphs(*, code_location, graph_location, exp_folder, func_tab_map, db
     global_ctr = 0
 
     # load deepdb instance
-    deepdb_estimator = DeepDBEstimator(
-        ensemble_locations=[deepdb_single_ensemble_location, deepdb_rel_ensemble_location],
-        db_name=db_name, scale=1)
+    if skip_deepdb:
+        deepdb_estimator = None
+    else:
+        deepdb_estimator = DeepDBEstimator(
+            ensemble_locations=[deepdb_single_ensemble_location, deepdb_rel_ensemble_location],
+            db_name=db_name, scale=1)
 
     # load schema relationships
     schema = load_schema_json(dataset=db_name)
@@ -779,7 +782,8 @@ def prepareGraphs(*, code_location, graph_location, exp_folder, func_tab_map, db
                                                                                      est_stats=est_stats,
                                                                                      duckdb_kwargs=duckdb_kwargs,
                                                                                      schema_relationships=schema_relationships,
-                                                                                     skip_wj=skip_wj)
+                                                                                     skip_wj=skip_wj,
+                                                                                     skip_deepdb=skip_deepdb)
         if contains_col_col_comparison:
             udf_w_col_col_comparison.append(func_name)
         for key, value in timings.items():

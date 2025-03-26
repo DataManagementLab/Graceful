@@ -23,6 +23,8 @@ if __name__ == '__main__':
     parser.add_argument('--deepdb_dir', default=None, type=str)
 
     parser.add_argument('--skip_wj', default=False, action='store_true')
+    parser.add_argument('--skip_deepdb', default=False, action='store_true')
+
     args = parser.parse_args()
 
     exp_folder = args.exp_folder
@@ -58,7 +60,7 @@ if __name__ == '__main__':
                       func_tab_map=os.path.join(args.exp_folder, "dbs", args.dataset, "func_table_dict.csv"),
                       db_name=args.dataset, dbms_wrapper=dbms_wrapper, graph_kwargs=graph_kwargs,
                       card_est_assume_lazy_eval=args.card_est_assume_lazy_eval,
-                      duckdb_kwargs=duckdb_kwargs, skip_wj=args.skip_wj,
+                      duckdb_kwargs=duckdb_kwargs, skip_wj=args.skip_wj, skip_deepdb = args.skip_deepdb,
                       deepdb_rel_ensemble_location=os.path.join(args.deepdb_dir, db.data_folder,
                                                                 f'spn_ensembles/ensemble_relationships_{db.data_folder}_0.3_10000000.pkl'),
                       deepdb_single_ensemble_location=os.path.join(args.deepdb_dir, db.data_folder,

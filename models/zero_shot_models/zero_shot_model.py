@@ -42,10 +42,12 @@ class ZeroShotModel(FcOutModel):
             tree_model_types = add_tree_model_types
         else:
             tree_model_types = add_tree_model_types + ['to_plan', 'intra_plan', 'intra_pred']
-        tree_layer_name = tree_layer_kwargs.pop('tree_layer_name')
+
+        copy_tree_layer_kwargs = tree_layer_kwargs.copy()
+        tree_layer_name = copy_tree_layer_kwargs.pop('tree_layer_name')
 
         mod_dict = {
-            name: message_aggregators.__dict__[tree_layer_name](**tree_layer_kwargs,
+            name: message_aggregators.__dict__[tree_layer_name](**copy_tree_layer_kwargs,
                                                                 test=self.test_with_count_edges_msg_aggr)
             for name in tree_model_types
         }
@@ -54,7 +56,7 @@ class ZeroShotModel(FcOutModel):
         if plans_have_no_udf:
             self.topological_mp_layer = None
         else:
-            self.topological_mp_layer = TopologicalMPLayer(tree_layer_kwargs=tree_layer_kwargs,
+            self.topological_mp_layer = TopologicalMPLayer(tree_layer_kwargs=copy_tree_layer_kwargs,
                                                            test_with_count_edges_msg_aggr=test_with_count_edges_msg_aggr)
 
         # these message passing steps are performed in the beginning (dependent on the concrete database system at hand)
