@@ -1,7 +1,7 @@
 from models.zero_shot_models.zero_shot_model import ZeroShotModel
 
 
-class PostgresZeroShotModel(ZeroShotModel):
+class DuckDBZeroShotModel(ZeroShotModel):
     """
     Zero-shot cost estimation model for postgres.
     """

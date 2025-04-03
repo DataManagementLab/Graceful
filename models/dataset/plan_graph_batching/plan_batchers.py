@@ -1,7 +1,7 @@
 from cross_db_benchmark.benchmark_tools.database import DatabaseSystem
-from models.dataset.plan_graph_batching.postgres_plan_batching import postgres_plan_collator
+from models.dataset.plan_graph_batching.dd_plan_batching import duckdb_plan_collator
 
 plan_collator_dict = {
-    DatabaseSystem.POSTGRES: postgres_plan_collator,
-    DatabaseSystem.DUCKDB: postgres_plan_collator,
+    DatabaseSystem.POSTGRES: duckdb_plan_collator,
+    DatabaseSystem.DUCKDB: duckdb_plan_collator,
 }

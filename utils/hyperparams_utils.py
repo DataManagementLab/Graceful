@@ -3,7 +3,7 @@ import os
 from typing import Dict, Any
 
 from cross_db_benchmark.datasets.datasets import dataset_list_dict
-from models.dataset.plan_featurization.postgres_plan_featurizations import featurization_dict
+from models.dataset.plan_featurization.dd_plan_featurizations import featurization_dict
 
 config_keywords = {
     'qloss': 'loss',

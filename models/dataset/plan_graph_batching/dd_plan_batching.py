@@ -861,17 +861,17 @@ def split_graphs_into_udf_and_sql(plans, db_statistics: Dict):
     return out_plans, udf_graph_bitmask
 
 
-def postgres_plan_collator(plans, est_card_udf_sel: Optional[int],
-                           card_type_below_udf: Optional[str], card_type_above_udf: Optional[str],
-                           card_type_in_udf: Optional[str], feature_statistics=None, db_statistics=None,
-                           featurization=None, dbms: str = None,
-                           offset_np_import: int = 0, multi_label_keep_duplicates: bool = False,
-                           zs_paper_dataset: bool = False, train_udf_graph_against_udf_runtime: bool = False,
-                           w_loop_end_node: bool = False, add_loop_loopend_edge: bool = False,
-                           card_est_assume_lazy_eval: bool = True, plans_have_no_udf: bool = False,
-                           skip_udf: bool = False, separate_sql_udf_graphs: bool = False,
-                           annotate_flat_vector_udf_preds: bool = False, flat_vector_model_path: str = None
-                           ):
+def duckdb_plan_collator(plans, est_card_udf_sel: Optional[int],
+                         card_type_below_udf: Optional[str], card_type_above_udf: Optional[str],
+                         card_type_in_udf: Optional[str], feature_statistics=None, db_statistics=None,
+                         featurization=None, dbms: str = None,
+                         offset_np_import: int = 0, multi_label_keep_duplicates: bool = False,
+                         zs_paper_dataset: bool = False, train_udf_graph_against_udf_runtime: bool = False,
+                         w_loop_end_node: bool = False, add_loop_loopend_edge: bool = False,
+                         card_est_assume_lazy_eval: bool = True, plans_have_no_udf: bool = False,
+                         skip_udf: bool = False, separate_sql_udf_graphs: bool = False,
+                         annotate_flat_vector_udf_preds: bool = False, flat_vector_model_path: str = None
+                         ):
     """
     Combines physical plans into a large graph that can be fed into ML models.
     :return:
