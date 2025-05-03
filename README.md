@@ -1,6 +1,6 @@
 # Graceful
 
-Sourcecode of our ICE '25 paper "GRACEFUL: A Learned Cost Estimator For UDFs"
+Sourcecode of our ICDE '25 paper "GRACEFUL: A Learned Cost Estimator For UDFs"
 
 <p align="center">
   <img src="graphics/graceful.jpg" width="50%">
@@ -11,7 +11,12 @@ Sourcecode of our ICE '25 paper "GRACEFUL: A Learned Cost Estimator For UDFs"
 Please cite our paper if you find this work useful or use it in your own research:
 
 ```
-TODO
+@article{wehrstein2025graceful,
+  title={GRACEFUL: A Learned Cost Estimator For UDFs},
+  author={Wehrstein, Johannes and Bang, Tiemo and Heinrich, Roman and Binnig, Carsten},
+  journal={arXiv preprint arXiv:2503.23863},
+  year={2025}
+}
 ```
 
 # Table of contents
@@ -46,7 +51,7 @@ file.
 ## Download Benchmark & Datasets
 
 You can download the following artifacts to fast-forward the setup process all
-from [here](https://osf.io/27ghj/?view_only=7b239f37992e4b7a9f9788b4fdcb17e1).
+from [here](https://osf.io/z6v95/?view_only=46f1fbb4da7d4bc986c838e394865e56).
 This includes:
 
 - Collected Query traces: Preprocessed and annotated query Traces of the executed workloads (ready to directly train the
