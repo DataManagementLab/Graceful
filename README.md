@@ -11,12 +11,19 @@ Sourcecode of our ICDE '25 paper "GRACEFUL: A Learned Cost Estimator For UDFs"
 Please cite our paper if you find this work useful or use it in your own research:
 
 ```
-@article{wehrstein2025graceful,
-  title={GRACEFUL: A Learned Cost Estimator For UDFs},
-  author={Wehrstein, Johannes and Bang, Tiemo and Heinrich, Roman and Binnig, Carsten},
-  journal={arXiv preprint arXiv:2503.23863},
-  year={2025}
-}
+@INPROCEEDINGS {,
+author = { Wehrstein, Johannes and Bang, Tiemo and Heinrich, Roman and Binnig, Carsten },
+booktitle = { 2025 IEEE 41st International Conference on Data Engineering (ICDE) },
+title = {{ GRACEFUL: A Learned Cost Estimator for UDFs }},
+year = {2025},
+volume = {},
+ISSN = {2375-026X},
+pages = {2450-2463},
+doi = {10.1109/ICDE65448.2025.00185},
+url = {https://doi.ieeecomputersociety.org/10.1109/ICDE65448.2025.00185},
+publisher = {IEEE Computer Society},
+address = {Los Alamitos, CA, USA},
+month =May}
 ```
 
 # Table of contents
