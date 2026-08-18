@@ -19,6 +19,19 @@ from pull_push_advisor.utils import assemble_pullup_pushdown_overlap_datasets, l
     create_pull_push_label_plot, convert_dict_of_lists_to_dataframe, gen_qerror_plot
 from utils.hyperparams_utils import get_config
 
+
+def str2bool(value):
+    #? Accept explicit True/False augmentation flags during pull-up evaluation.
+    if isinstance(value, bool):
+        return value
+    value = value.lower()
+    if value in ('true', '1', 'yes', 'y'):
+        return True
+    if value in ('false', '0', 'no', 'n'):
+        return False
+    raise argparse.ArgumentTypeError(f'Expected a boolean value, got {value}')
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--pullup_plans_path', required=True, default=None)
@@ -37,6 +50,15 @@ if __name__ == '__main__':
     ###
     parser.add_argument('--mp_ignore_udf', type=bool, default=argparse.SUPPRESS)
     parser.add_argument('--work_with_udf_repr', default=False, action='store_true')
+    #? These must match training when loading an augmented checkpoint.
+    parser.add_argument('--augment', type=str2bool, default=argparse.SUPPRESS)
+    parser.add_argument('--augment_pooling', choices=['mean', 'sum', 'weighted_mean', 'attention'],
+                        default=argparse.SUPPRESS)
+    parser.add_argument('--augment_refinement', choices=['residual_sum', 'gated_residual'],
+                        default=argparse.SUPPRESS)
+    parser.add_argument('--augment_coarse_layers', type=int, default=argparse.SUPPRESS)
+    parser.add_argument('--augment_include_inv', type=str2bool, default=argparse.SUPPRESS)
+    parser.add_argument('--augment_refine_ret', type=str2bool, default=argparse.SUPPRESS)
     ###
     # End Args
     ###
@@ -78,6 +100,18 @@ if __name__ == '__main__':
         args_config['mp_ignore_udf'] = args.mp_ignore_udf
     if args.work_with_udf_repr:
         args_config['work_with_udf_repr'] = args.work_with_udf_repr
+    if hasattr(args, 'augment'):
+        args_config['augment'] = args.augment
+    if hasattr(args, 'augment_pooling'):
+        args_config['augment_pooling'] = args.augment_pooling
+    if hasattr(args, 'augment_refinement'):
+        args_config['augment_refinement'] = args.augment_refinement
+    if hasattr(args, 'augment_coarse_layers'):
+        args_config['augment_coarse_layers'] = args.augment_coarse_layers
+    if hasattr(args, 'augment_include_inv'):
+        args_config['augment_include_inv'] = args.augment_include_inv
+    if hasattr(args, 'augment_refine_ret'):
+        args_config['augment_refine_ret'] = args.augment_refine_ret
 
     orig_args_config = args_config.copy()
     config, _, _, _, _ = get_config(args_config, wl_base_path='', assemble_filenames=False)
@@ -135,13 +169,19 @@ if __name__ == '__main__':
                                        plans_have_no_udf=False,
                                        train_udf_graph_against_udf_runtime=False,
                                        work_with_udf_repr=config['work_with_udf_repr'],
-                                       test_with_count_edges_msg_aggr=False)
+                                       test_with_count_edges_msg_aggr=False,
+                                       augment=config['augment'],
+                                       augment_pooling=config['augment_pooling'],
+                                       augment_refinement=config['augment_refinement'],
+                                       augment_coarse_layers=config['augment_coarse_layers'],
+                                       augment_include_inv=config['augment_include_inv'],
+                                       augment_refine_ret=config['augment_refine_ret'])
 
     # move to gpu
     model = model.to(model.device)
 
     metrics = [RMSE(), MAPE(), QError(percentile=50, early_stopping_metric=True), QError(percentile=95),
-               QError(percentile=100)]
+               QError(percentile=99), QError(percentile=100)]
 
     # load checkpoint
     csv_stats, epochs_wo_improvement, epoch, model, optimizer, lr_scheduler, metrics, finished = \

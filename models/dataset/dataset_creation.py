@@ -11,6 +11,7 @@ import numpy as np
 from sklearn import preprocessing
 from sklearn.pipeline import Pipeline
 from tabulate import tabulate
+import torch
 from torch.utils.data import DataLoader
 
 from cross_db_benchmark.benchmark_tools.database import DatabaseSystem
@@ -25,9 +26,16 @@ class NoPlansFoundException(Exception):
         super().__init__(message)
 
 
+def seed_dataloader_worker(worker_id):
+    #? Seed NumPy and Python RNGs inside each DataLoader worker from PyTorch's worker seed.
+    worker_seed = torch.initial_seed() % 2 ** 32
+    np.random.seed(worker_seed)
+    random.seed(worker_seed)
+
+
 def read_workload_runs(workload_run_paths, min_runtime_ms: int, limit_queries=None, limit_queries_affected_wl=None,
                        train_udf_graph_against_udf_runtime: bool = False, stratify_per_database: bool = False,
-                       max_runtime: int = None, stratification_prioritize_loops: bool = False):
+                       max_runtime: int = None, stratification_prioritize_loops: bool = False, seed: int = 0):
     # reads several workload runs
     plans = []
     database_statistics = dict()
@@ -139,7 +147,7 @@ def read_workload_runs(workload_run_paths, min_runtime_ms: int, limit_queries=No
             assert max_runtime is not None
             ds_plans = balance_plans(ds_plans, max_runtime, hint=source, print_distr_stats=False,
                                      train_udf_graph_against_udf_runtime=train_udf_graph_against_udf_runtime,
-                                     prioritize_loops=stratification_prioritize_loops)
+                                     prioritize_loops=stratification_prioritize_loops, seed=seed)
         plans.extend(ds_plans)
 
     print(f"No of Plans: {len(plans)} (min runtime discards: {min_runtime_discards})",flush=True)
@@ -153,7 +161,7 @@ def _inv_log1p(x):
 
 def balance_plans(plans: List, max_runtime: int, hint: str, print_distr_stats: bool = False,
                   shuffle_before: bool = True, train_udf_graph_against_udf_runtime: bool = False,
-                  prioritize_loops: bool = True):
+                  prioritize_loops: bool = True, seed: int = 0):
     if len(plans) == 0:
         return plans
 
@@ -162,9 +170,9 @@ def balance_plans(plans: List, max_runtime: int, hint: str, print_distr_stats: b
     orig_num_plans = len(plans)
     assert max_runtime is not None
 
-    # shuffle the plans with seed 42
+    #? Shuffle with the experiment seed so stratified sampling is repeatable.
     if shuffle_before:
-        random.Random(0).shuffle(plans)
+        random.Random(seed).shuffle(plans)
 
     # get the runtimes
     if train_udf_graph_against_udf_runtime:
@@ -266,7 +274,7 @@ def balance_plans(plans: List, max_runtime: int, hint: str, print_distr_stats: b
     assert len(bin_edges) == len(no_plans_per_bin) == len(
         no_plans_per_bin_balanced), f"Lengths do not match: {len(bin_edges)}, {len(no_plans_per_bin)}, {len(no_plans_per_bin_balanced)}"
 
-    random.Random(0).shuffle(plans)
+    random.Random(seed).shuffle(plans)
 
     print(f'Balancing of dataset by runtimes: {orig_num_plans} -> {len(plans)} ({hint})', flush=True)
     if print_distr_stats:
@@ -286,7 +294,7 @@ def create_datasets(workload_run_paths, cap_training_samples=None, val_ratio=0.1
                     zs_paper_dataset: bool = False, train_udf_graph_against_udf_runtime: bool = False,
                     infuse_plans=None, infuse_database_statistics=None, stratification_prioritize_loops: bool = False,
                     filter_plans: Dict[str, int] = None, w_loop_end_node: bool = True,
-                    card_est_assume_lazy_eval: bool = False, ):
+                    card_est_assume_lazy_eval: bool = False, seed: int = 0, ):
     if infuse_plans is not None:
         plans = infuse_plans
         database_statistics = infuse_database_statistics
@@ -297,7 +305,8 @@ def create_datasets(workload_run_paths, cap_training_samples=None, val_ratio=0.1
                                                         min_runtime_ms=min_runtime_ms,
                                                         stratify_per_database=stratify_per_database_by_runtimes,
                                                         max_runtime=max_runtime,
-                                                        stratification_prioritize_loops=stratification_prioritize_loops)
+                                                        stratification_prioritize_loops=stratification_prioritize_loops,
+                                                        seed=seed)
 
     # extract filter conditions
     if filter_plans is None:
@@ -411,14 +420,14 @@ def create_datasets(workload_run_paths, cap_training_samples=None, val_ratio=0.1
     if stratify_dataset_by_runtimes:
         plans = balance_plans(plans, max_runtime, hint='all', print_distr_stats=False,
                               train_udf_graph_against_udf_runtime=train_udf_graph_against_udf_runtime,
-                              prioritize_loops=stratification_prioritize_loops)
+                              prioritize_loops=stratification_prioritize_loops, seed=seed)
 
     assert len(plans) > 0, f"No plans found in the workload runs after stratifying: {workload_run_paths}"
 
     no_plans = len(plans)
     plan_idxs = list(range(no_plans))
     if shuffle_before_split:
-        np.random.shuffle(plan_idxs)
+        np.random.default_rng(seed).shuffle(plan_idxs)
 
     train_ratio = 1 - val_ratio
     split_train = int(no_plans * train_ratio)
@@ -508,6 +517,7 @@ def create_dataloader(workload_run_paths, test_workload_run_paths: Optional[List
                       feature_statistics: dict = None, plans_have_no_udf: bool = False, skip_udf: bool = False,
                       filter_plans: Dict[str, int] = None, separate_sql_udf_graphs: bool = False,
                       annotate_flat_vector_udf_preds: bool = False, flat_vector_model_path: str = None,
+                      seed: int = 0,
                       ) -> [Any, Dict, DataLoader, DataLoader, List[DataLoader], List[str], List[DataLoader]]:
     """
     Creates dataloaders that batches physical plans to train the model in a distributed fashion.
@@ -539,7 +549,7 @@ def create_dataloader(workload_run_paths, test_workload_run_paths: Optional[List
             train_udf_graph_against_udf_runtime=train_udf_graph_against_udf_runtime,
             min_runtime_ms=min_runtime_ms, stratification_prioritize_loops=stratification_prioritize_loops,
             filter_plans=filter_plans, w_loop_end_node=w_loop_end_node,
-            card_est_assume_lazy_eval=card_est_assume_lazy_eval)
+            card_est_assume_lazy_eval=card_est_assume_lazy_eval, seed=seed)
     else:
         label_norm = None
         train_dataset = None
@@ -575,8 +585,11 @@ def create_dataloader(workload_run_paths, test_workload_run_paths: Optional[List
                                          card_type_in_udf=card_type_in_udf, plans_have_no_udf=plans_have_no_udf,
                                          skip_udf=skip_udf, separate_sql_udf_graphs=separate_sql_udf_graphs,
                                          annotate_flat_vector_udf_preds=annotate_flat_vector_udf_preds, flat_vector_model_path=flat_vector_model_path)
+    dataloader_generator = torch.Generator()
+    dataloader_generator.manual_seed(seed)
     dataloader_args = dict(batch_size=batch_size, shuffle=shuffle, num_workers=num_workers, collate_fn=train_collate_fn,
-                           pin_memory=pin_memory)
+                           pin_memory=pin_memory, worker_init_fn=seed_dataloader_worker,
+                           generator=dataloader_generator)
     if train_dataset is None or len(train_dataset) == 0:
         train_loader = None
         val_loader = None
@@ -615,7 +628,8 @@ def create_dataloader(workload_run_paths, test_workload_run_paths: Optional[List
                                                                                                         min_runtime_ms=min_runtime_ms,
                                                                                                         stratification_prioritize_loops=stratification_prioritize_loops,
                                                                                                         w_loop_end_node=w_loop_end_node,
-                                                                                                        card_est_assume_lazy_eval=card_est_assume_lazy_eval)
+                                                                                                        card_est_assume_lazy_eval=card_est_assume_lazy_eval,
+                                                                                                        seed=seed)
                 except NoPlansFoundException as e:
                     print(e)
                     print(f"No plans found in test workload run {p}")

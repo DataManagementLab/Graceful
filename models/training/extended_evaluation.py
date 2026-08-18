@@ -39,7 +39,7 @@ def _slice_and_log(x: np.ndarray, y: np.ndarray, slice_by: np.ndarray, slice_by_
 
     # compute the qerror for each slice
     metrics = [QError(percentile=50, verbose=False), QError(percentile=95, verbose=False),
-               QError(percentile=100, verbose=False)]
+               QError(percentile=99, verbose=False), QError(percentile=100, verbose=False)]
 
     # run the metrics on each slice and log the results
     qerror_results = defaultdict(dict)

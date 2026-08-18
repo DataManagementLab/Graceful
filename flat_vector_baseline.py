@@ -121,8 +121,11 @@ def extract_card_runtime_dict_from_plans(plans, func_names: List[str]):
 
     return udf_card_runtime_dict, udf_num_loops_branches_dict
 
-
-api = wandb.Api()
+#? 
+try:
+    api = wandb.Api()
+except Exception:
+    api = None
 
 datasets = ['airline', 'imdb', 'ssb', 'tpc_h', 'walmart', 'financial', 'basketball', 'accidents', 'movielens',
             'baseball', 'hepatitis', 'tournament', 'genome', 'credit', 'employee', 'carcinogenesis', 'consumer',

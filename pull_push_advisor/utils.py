@@ -138,6 +138,7 @@ def log_q_errors(preds, labels):
     qerrors = [
         ('q50', QError(percentile=50, verbose=False)),
         ('q95', QError(percentile=95, verbose=False)),
+        ('q99', QError(percentile=99, verbose=False)),
         ('q100', QError(percentile=100, verbose=False))
     ]
     d = dict()

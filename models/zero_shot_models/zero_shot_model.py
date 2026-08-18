@@ -6,6 +6,7 @@ from models.zero_shot_models.message_aggregators import message_aggregators
 from models.zero_shot_models.topological_mp_layer import TopologicalMPLayer
 from models.zero_shot_models.utils.fc_out_model import FcOutModel
 from models.zero_shot_models.utils.node_type_encoder import NodeTypeEncoder
+from models.graph_augmentor import SemanticGraphAugmentor
 
 
 class ZeroShotModel(FcOutModel):
@@ -20,7 +21,12 @@ class ZeroShotModel(FcOutModel):
                  encoders=None, label_norm=None, mp_ignore_udf: bool = False, return_graph_repr: bool = False,
                  return_udf_repr: bool = False, plans_have_no_udf: bool = False,
                  train_udf_graph_against_udf_runtime: bool = False, work_with_udf_repr: bool = False,
-                 test_with_count_edges_msg_aggr: bool = False):
+                 test_with_count_edges_msg_aggr: bool = False,
+                 augment: bool = False, augment_pooling: str = "attention",
+                 augment_refinement: str = "gated_residual",
+                 augment_coarse_layers: int = 1,
+                 augment_include_inv: bool = False,
+                 augment_refine_ret: bool = True):
 
         super().__init__(output_dim=output_dim, final_out_layer=True, **final_mlp_kwargs)
 
@@ -36,6 +42,7 @@ class ZeroShotModel(FcOutModel):
         self.train_udf_graph_against_udf_runtime = train_udf_graph_against_udf_runtime
         self.work_with_udf_repr = work_with_udf_repr
         self.test_with_count_edges_msg_aggr = test_with_count_edges_msg_aggr
+        self.augment = augment
 
         # use different models per edge type
         if self.train_udf_graph_against_udf_runtime:
@@ -58,6 +65,17 @@ class ZeroShotModel(FcOutModel):
         else:
             self.topological_mp_layer = TopologicalMPLayer(tree_layer_kwargs=copy_tree_layer_kwargs,
                                                            test_with_count_edges_msg_aggr=test_with_count_edges_msg_aggr)
+        #? The augmentor is constructed only when requested so base GRACEFUL checkpoints remain compatible.
+        if self.augment and not plans_have_no_udf:
+            self.graph_augmentor = SemanticGraphAugmentor(
+                hidden_dim=copy_tree_layer_kwargs['hidden_dim'],
+                pooling=augment_pooling,
+                refinement=augment_refinement,
+                coarse_layers=augment_coarse_layers,
+                include_inv=augment_include_inv,
+                refine_ret=augment_refine_ret)
+        else:
+            self.graph_augmentor = None
 
         # these message passing steps are performed in the beginning (dependent on the concrete database system at hand)
         self.prepasses = prepasses
@@ -70,6 +88,12 @@ class ZeroShotModel(FcOutModel):
                 enc_name: NodeTypeEncoder(features, feature_statistics, **node_type_kwargs)
                 for enc_name, features in encoders
             })
+
+    def get_coarse_fine_loss(self):
+        #? Training reads this optional auxiliary loss after a forward pass when augmentation is enabled.
+        if self.graph_augmentor is None:
+            return None
+        return self.graph_augmentor.last_coarse_fine_loss
 
     def encode_node_types(self, g, features):
         """
@@ -238,6 +262,9 @@ class ZeroShotModel(FcOutModel):
 
             # all to udf passes
             apply_mp_directions(pre_pass_directions)
+            #? Optional semantic graph augmentation runs after column-to-UDF context and before standard UDF MP.
+            if self.graph_augmentor is not None:
+                feat_dict = self.graph_augmentor(g, feat_dict)
             # mp in udf
             if not self.mp_ignore_udf and not self.plans_have_no_udf:
                 feat_dict = self.topological_mp(g, feat_dict)
@@ -290,8 +317,11 @@ class PassDirection:
             self.in_types.add(curr_n_src)
             self.out_types.add(curr_n_dest)
 
-        self.etypes = list(self.etypes)
-        self.in_types = list(self.in_types)
-        self.out_types = list(self.out_types)
+        # Set iteration order depends on Python's per-process hash seed. Stable
+        # ordering keeps DGL reductions and floating-point accumulation aligned
+        # across otherwise identical runs.
+        self.etypes = sorted(self.etypes)
+        self.in_types = sorted(self.in_types)
+        self.out_types = sorted(self.out_types)
         if not allow_empty:
             assert len(self.etypes) > 0, f"No nodes in the graph qualify for e_name={e_name}, n_dest={n_dest}"

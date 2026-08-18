@@ -140,6 +140,13 @@ def get_config(hyperparams: Dict[str, Any], wl_base_path: str, assemble_filename
         separate_udf_model=False,
         udf_only_pretrained_model_artifact_dir=None,
         udf_only_pretrained_model_filename=None,
+        augment=False,
+        augment_pooling='attention',
+        augment_refinement='gated_residual',
+        augment_coarse_layers=1,
+        augment_include_inv=False,
+        augment_refine_ret=True,
+        lambda_struct=0.0,
     )
 
     """
@@ -359,6 +366,36 @@ def get_config(hyperparams: Dict[str, Any], wl_base_path: str, assemble_filename
         config['udf_only_pretrained_model_artifact_dir'] = hyperparams.pop('udf_only_pretrained_model_artifact_dir')
     if 'udf_only_pretrained_model_filename' in hyperparams:
         config['udf_only_pretrained_model_filename'] = hyperparams.pop('udf_only_pretrained_model_filename')
+    if 'augment' in hyperparams:
+        #? Augmentation is opt-in so the base GRACEFUL model remains the default.
+        config['augment'] = hyperparams.pop('augment')
+        if config['augment']:
+            model_name = f'aug_{model_name}'
+    if 'augment_pooling' in hyperparams:
+        config['augment_pooling'] = hyperparams.pop('augment_pooling')
+        if config['augment']:
+            model_name += f'_augpool{config["augment_pooling"]}'
+    if 'augment_refinement' in hyperparams:
+        config['augment_refinement'] = hyperparams.pop('augment_refinement')
+        if config['augment']:
+            model_name += f'_augref{config["augment_refinement"]}'
+    if 'augment_coarse_layers' in hyperparams:
+        config['augment_coarse_layers'] = hyperparams.pop('augment_coarse_layers')
+        if config['augment']:
+            model_name += f'_augcl{config["augment_coarse_layers"]}'
+    if 'augment_include_inv' in hyperparams:
+        config['augment_include_inv'] = hyperparams.pop('augment_include_inv')
+        if config['augment'] and config['augment_include_inv']:
+            model_name += '_auginv'
+    if 'augment_refine_ret' in hyperparams:
+        config['augment_refine_ret'] = hyperparams.pop('augment_refine_ret')
+        if config['augment'] and not config['augment_refine_ret']:
+            model_name += '_augnoRET'
+    if 'lambda_struct' in hyperparams:
+        #? This only affects training loss; base GRACEFUL still uses runtime loss alone when augmentation is off.
+        config['lambda_struct'] = hyperparams.pop('lambda_struct')
+        if config['augment'] and config['lambda_struct'] > 0:
+            model_name += f'_cfl{config["lambda_struct"]}'
 
     base_featurization = None
     # extract base featurization from model config

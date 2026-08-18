@@ -1,5 +1,6 @@
 import functools
 import os
+import random
 import time
 from copy import copy, deepcopy
 from typing import Dict, List, Tuple, Any
@@ -25,13 +26,53 @@ from models.training.utils import batch_to, find_early_stopping_metric
 from models.zero_shot_models.specific_models.model import zero_shot_models
 
 
+def configure_reproducibility(seed: int, deterministic: bool = False):
+    """Seed every RNG used by training and optionally require deterministic kernels."""
+    # cuBLAS reads this before creating a CUDA handle. Set it before any CUDA RNG call.
+    if deterministic:
+        os.environ.setdefault('CUBLAS_WORKSPACE_CONFIG', ':4096:8')
+
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+    # DGL owns RNG state in addition to PyTorch's RNG state.
+    if hasattr(dgl, 'seed'):
+        dgl.seed(seed)
+    if hasattr(dgl, 'random') and hasattr(dgl.random, 'seed'):
+        dgl.random.seed(seed)
+
+    if deterministic:
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
+        if hasattr(torch.backends, 'cuda') and hasattr(torch.backends.cuda, 'matmul'):
+            torch.backends.cuda.matmul.allow_tf32 = False
+        if hasattr(torch.backends.cudnn, 'allow_tf32'):
+            torch.backends.cudnn.allow_tf32 = False
+        # Fail loudly if PyTorch encounters an operation for which it cannot
+        # provide a deterministic implementation.
+        torch.use_deterministic_algorithms(True)
+
+    hash_seed = os.environ.get('PYTHONHASHSEED')
+    if deterministic and hash_seed != str(seed):
+        print(f'WARNING: deterministic mode requires PYTHONHASHSEED={seed} to be set before Python starts; '
+              f'current value is {hash_seed!r}', flush=True)
+    print(f'Reproducibility: seed={seed}, deterministic={deterministic}, '
+          f'PYTHONHASHSEED={hash_seed}', flush=True)
+
+
 def train_epoch(epoch_stats, train_loader, model, optimizer, max_epoch_tuples, custom_batch_to=batch_to,
-                pt_profiler=None, gradient_norm: bool = False, test_with_count_edges_msg_aggr: bool = False):
+                pt_profiler=None, gradient_norm: bool = False, test_with_count_edges_msg_aggr: bool = False,
+                lambda_struct: float = 0.0):
     model.train()
 
     # run remaining batches
     train_start_t = time.perf_counter()
     losses = []
+    runtime_losses = []
+    struct_losses = []
     errs = []
 
     error_ctr = 0
@@ -70,7 +111,15 @@ def train_epoch(epoch_stats, train_loader, model, optimizer, max_epoch_tuples, c
 
         if torch.isnan(output).any():
             raise ValueError('Output was NaN')
-        loss = model.loss_fxn(output, label)
+        runtime_loss = model.loss_fxn(output, label)
+        loss = runtime_loss
+        #? If augmentation produced a coarse-fine loss, add it as a weak structural regularizer.
+        if lambda_struct > 0 and hasattr(model, 'get_coarse_fine_loss'):
+            coarse_fine_loss = model.get_coarse_fine_loss()
+            if coarse_fine_loss is not None:
+                loss = runtime_loss + lambda_struct * coarse_fine_loss
+                struct_losses.append(coarse_fine_loss.detach().cpu().numpy())
+        runtime_losses.append(runtime_loss.detach().cpu().numpy())
         if torch.isnan(loss):
             raise ValueError('Loss was NaN')
         if not test_with_count_edges_msg_aggr:
@@ -125,10 +174,14 @@ def train_epoch(epoch_stats, train_loader, model, optimizer, max_epoch_tuples, c
         print(f'Error count: {error_ctr}', flush=True)
 
     mean_loss = np.mean(losses)
+    mean_runtime_loss = np.mean(runtime_losses)
+    mean_struct_loss = np.mean(struct_losses) if len(struct_losses) > 0 else 0.0
     mean_rmse = np.sqrt(np.mean(np.square(errs)))
     # print(f"Train Loss: {mean_loss:.2f}")
     # print(f"Train RMSE: {mean_rmse:.2f}")
-    epoch_stats.update(train_time=time.perf_counter() - train_start_t, mean_loss=mean_loss, mean_rmse=mean_rmse)
+    epoch_stats.update(train_time=time.perf_counter() - train_start_t, mean_loss=mean_loss,
+                       mean_runtime_loss=mean_runtime_loss, mean_struct_loss=mean_struct_loss,
+                       mean_rmse=mean_rmse)
 
 
 def run_inference(data_loader: torch.utils.data.DataLoader, model: torch.nn.Module, max_epoch_tuples: int,
@@ -562,13 +615,20 @@ def train_model(workload_runs,
                 separate_udf_model:bool=False,
                 udf_only_pretrained_model_artifact_dir: str = None,
                 udf_only_pretrained_model_filename: str = None,
+                augment: bool = False,
+                augment_pooling: str = "attention",
+                augment_refinement: str = "gated_residual",
+                augment_coarse_layers: int = 1,
+                augment_include_inv: bool = False,
+                augment_refine_ret: bool = True,
+                lambda_struct: float = 0.0,
+                deterministic: bool = False,
+                test_all_cardinality: bool = True,
                 ):
     if model_kwargs is None:
         model_kwargs = dict()
 
-    # seed for reproducibility
-    torch.manual_seed(seed)
-    np.random.seed(seed)
+    configure_reproducibility(seed, deterministic=deterministic)
 
     assert card_type in ['est', 'act', 'dd']
 
@@ -592,19 +652,20 @@ def train_model(workload_runs,
                           stratification_prioritize_loops=stratification_prioritize_loops, skip_udf=skip_udf,
                           filter_plans=filter_plans, separate_sql_udf_graphs=separate_sql_udf_graphs or separate_udf_model,
                           annotate_flat_vector_udf_preds=flat_vector_udf_est,
-                          flat_vector_model_path=flat_vector_model_path)
+                          flat_vector_model_path=flat_vector_model_path,
+                          seed=seed)
 
     assert len(test_loaders) > 0, "No test loaders found"
 
     if loss_class_name == 'QLoss':
         metrics = [RMSE(), MAPE(), QError(percentile=50, early_stopping_metric=True), QError(percentile=95),
-                   QError(percentile=100), ProcentualError()]
+                   QError(percentile=99), QError(percentile=100), ProcentualError()]
     elif loss_class_name == 'MSELoss':
         metrics = [RMSE(early_stopping_metric=True), MAPE(), QError(percentile=50), QError(percentile=95),
-                   QError(percentile=100), ProcentualError()]
+                   QError(percentile=99), QError(percentile=100), ProcentualError()]
     elif loss_class_name == 'ProcentualLoss':
         metrics = [RMSE(), MAPE(), QError(percentile=50), QError(percentile=95),
-                   QError(percentile=100), ProcentualError(early_stopping_metric=True)]
+                   QError(percentile=99), QError(percentile=100), ProcentualError(early_stopping_metric=True)]
     else:
         raise ValueError(f'Unknown loss class {loss_class_name}')
 
@@ -621,6 +682,12 @@ def train_model(workload_runs,
                                   train_udf_graph_against_udf_runtime=train_udf_graph_against_udf_runtime,
                                   work_with_udf_repr=work_with_udf_repr,
                                   test_with_count_edges_msg_aggr=test_with_count_edges_msg_aggr,
+                                  augment=augment,
+                                  augment_pooling=augment_pooling,
+                                  augment_refinement=augment_refinement,
+                                  augment_coarse_layers=augment_coarse_layers,
+                                  augment_include_inv=augment_include_inv,
+                                  augment_refine_ret=augment_refine_ret,
                                   **model_kwargs)
     model = gen_model()
 
@@ -702,7 +769,8 @@ def train_model(workload_runs,
                            register_at_wandb=register_at_wandb,
                            additional_wandb_stats=additional_wandb_stats, test_loader=test_loaders[0], valtest=valtest,
                            test_with_count_edges_msg_aggr=test_with_count_edges_msg_aggr,
-                           separate_sql_udf_graphs=separate_sql_udf_graphs, flat_vector_udf_est=flat_vector_udf_est)
+                           separate_sql_udf_graphs=separate_sql_udf_graphs, flat_vector_udf_est=flat_vector_udf_est,
+                           lambda_struct=lambda_struct)
 
             epoch += 1
 
@@ -729,7 +797,8 @@ def train_model(workload_runs,
                            register_at_wandb=register_at_wandb,
                            additional_wandb_stats=additional_wandb_stats, test_loader=test_loaders[0], valtest=valtest,
                            test_with_count_edges_msg_aggr=test_with_count_edges_msg_aggr,
-                           separate_sql_udf_graphs=separate_sql_udf_graphs, flat_vector_udf_est=flat_vector_udf_est)
+                           separate_sql_udf_graphs=separate_sql_udf_graphs, flat_vector_udf_est=flat_vector_udf_est,
+                           lambda_struct=lambda_struct)
             epoch += 1
 
             if ft_lr is not None and epoch > (epoch_offset + ft_epochs_udf_only) * 0.75 and optimizer.param_groups[0][
@@ -802,7 +871,9 @@ def train_model(workload_runs,
                                                          query_stats=train_query_stats)
                     wandb.log(train_udf_pca)
 
-            for card in ['est', 'act', 'dd', 'wj']:
+            test_cardinalities = ['est', 'act', 'dd', 'wj'] if test_all_cardinality else [card_type]
+            print(f"Test cardinalities: {', '.join(test_cardinalities)}", flush=True)
+            for card in test_cardinalities:
                 _, _, _, _, _, _, test_loaders, test_loader_names, _ = \
                     create_dataloader([], test_workload_runs, statistics_file, featurization, database,
                                       val_ratio=0.15, finetune_ratio=0.0, batch_size=batch_size, shuffle=True,
@@ -825,7 +896,8 @@ def train_model(workload_runs,
                                       plans_have_no_udf=plans_have_no_udf, filter_plans=filter_plans,
                                       separate_sql_udf_graphs=separate_sql_udf_graphs or separate_udf_model,
                                       annotate_flat_vector_udf_preds=flat_vector_udf_est,
-                                      flat_vector_model_path=flat_vector_model_path)
+                                      flat_vector_model_path=flat_vector_model_path,
+                                      seed=seed)
 
                 for test_loader, path in zip(test_loaders, test_loader_names):
 
@@ -930,7 +1002,8 @@ def train_epoch_fn(epoch: int, train_loader: torch.utils.data.DataLoader,
                    register_at_wandb: bool, separate_sql_udf_graphs: bool, flat_vector_udf_est: bool,
                    additional_wandb_stats: Dict = None,
                    test_loader: torch.utils.data.DataLoader = None, apply_pca_evaluation: bool = True,
-                   valtest: bool = True, test_with_count_edges_msg_aggr: bool = False, ):
+                   valtest: bool = True, test_with_count_edges_msg_aggr: bool = False,
+                   lambda_struct: float = 0.0):
     print(f"Epoch {epoch}")
     epoch_stats = {
         'epoch': epoch,
@@ -940,7 +1013,8 @@ def train_epoch_fn(epoch: int, train_loader: torch.utils.data.DataLoader,
     epoch_start_time = time.perf_counter()
 
     train_epoch(epoch_stats, train_loader, model, optimizer, max_epoch_tuples, pt_profiler=prof,
-                gradient_norm=apply_gradient_norm, test_with_count_edges_msg_aggr=test_with_count_edges_msg_aggr)
+                gradient_norm=apply_gradient_norm, test_with_count_edges_msg_aggr=test_with_count_edges_msg_aggr,
+                lambda_struct=lambda_struct)
 
     any_best_metric, wandb_plots, val_graph_reprs, val_udf_reprs, val_labels, val_preds, val_query_stats = validate_model(
         val_loader,

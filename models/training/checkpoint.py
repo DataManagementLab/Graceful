@@ -130,8 +130,13 @@ def load_checkpoint(model, target_path, model_name, filetype='.pt', optimizer=No
 
             if metrics is not None:
                 for m in metrics:
-                    m.best_model = checkpoint[m.metric_name + '_best_model']
-                    m.best_seen_value = checkpoint[m.metric_name + '_best_seen_value']
+                    best_model_key = m.metric_name + '_best_model'
+                    best_value_key = m.metric_name + '_best_seen_value'
+                    if best_model_key in checkpoint and best_value_key in checkpoint:
+                        m.best_model = checkpoint[best_model_key]
+                        m.best_seen_value = checkpoint[best_value_key]
+                    else:
+                        print(f"Checkpoint has no history for {m.metric_name}; using metric defaults")
 
             target_csv_path = os.path.join(target_path, f'{model_name}.csv')
             csv_stats = load_stats_csv(target_csv_path)

@@ -16,6 +16,18 @@ from models.training.train import train_model
 from utils.hyperparams_utils import get_config
 
 
+def str2bool(value):
+    #? Accept explicit True/False values from shell variables in run_code.sh.
+    if isinstance(value, bool):
+        return value
+    value = value.lower()
+    if value in ('true', '1', 'yes', 'y'):
+        return True
+    if value in ('false', '0', 'no', 'n'):
+        return False
+    raise argparse.ArgumentTypeError(f'Expected a boolean value, got {value}')
+
+
 def run_train(
         orig_args_config: Dict[str, Any],
 
@@ -25,6 +37,8 @@ def run_train(
         device: str,
         register_at_wandb: bool,
         seed: int = 0,
+        deterministic: bool = False,
+        test_all_cardinality: bool = True,
         wandb_run_data: Dict = None,
 
         limit_queries: int = None,
@@ -86,6 +100,8 @@ def run_train(
                 limit_queries=limit_queries,
                 limit_queries_affected_wl=limit_queries_affected_wl,
                 seed=seed,
+                deterministic=deterministic,
+                test_all_cardinality=test_all_cardinality,
                 skip_train=skip_train,
                 register_at_wandb=register_at_wandb,
                 pt_profile=pt_profile,
@@ -114,6 +130,10 @@ if __name__ == '__main__':
                         choices=list(DatabaseSystem))
 
     parser.add_argument('--seed', type=int, default=0)
+    parser.add_argument('--deterministic', action='store_true',
+                        help='Require deterministic PyTorch/CUDA algorithms for reproducible reruns')
+    parser.add_argument('--test_all_cardinality', type=str2bool, default=True,
+                        help='Test all est/act/dd/wj cardinalities; False tests only --card_type')
     parser.add_argument('--skip_train', action='store_true')
     parser.add_argument('--pt_profile', action='store_true')
     parser.add_argument('--max_runtime', default=30, type=int,
@@ -182,6 +202,17 @@ if __name__ == '__main__':
 
     # flat vector udf-cost model (hybrid baseline)
     parser.add_argument('--flat_vector_model_path', type=str, default=argparse.SUPPRESS)
+
+    #? Semantic graph augmentation controls are disabled by default for base GRACEFUL compatibility.
+    parser.add_argument('--augment', type=str2bool, default=argparse.SUPPRESS)
+    parser.add_argument('--augment_pooling', choices=['mean', 'sum', 'weighted_mean', 'attention'],
+                        default=argparse.SUPPRESS)
+    parser.add_argument('--augment_refinement', choices=['residual_sum', 'gated_residual'],
+                        default=argparse.SUPPRESS)
+    parser.add_argument('--augment_coarse_layers', type=int, default=argparse.SUPPRESS)
+    parser.add_argument('--augment_include_inv', type=str2bool, default=argparse.SUPPRESS)
+    parser.add_argument('--augment_refine_ret', type=str2bool, default=argparse.SUPPRESS)
+    parser.add_argument('--lambda_struct', type=float, default=argparse.SUPPRESS)
 
     args = parser.parse_args()
 
@@ -290,6 +321,20 @@ if __name__ == '__main__':
         args_config['max_num_comp_nodes'] = args.max_num_comp_nodes
     if hasattr(args,'flat_vector_model_path'):
         args_config['flat_vector_model_path'] = args.flat_vector_model_path
+    if hasattr(args, 'augment'):
+        args_config['augment'] = args.augment
+    if hasattr(args, 'augment_pooling'):
+        args_config['augment_pooling'] = args.augment_pooling
+    if hasattr(args, 'augment_refinement'):
+        args_config['augment_refinement'] = args.augment_refinement
+    if hasattr(args, 'augment_coarse_layers'):
+        args_config['augment_coarse_layers'] = args.augment_coarse_layers
+    if hasattr(args, 'augment_include_inv'):
+        args_config['augment_include_inv'] = args.augment_include_inv
+    if hasattr(args, 'augment_refine_ret'):
+        args_config['augment_refine_ret'] = args.augment_refine_ret
+    if hasattr(args, 'lambda_struct'):
+        args_config['lambda_struct'] = args.lambda_struct
 
     train_fn = functools.partial(run_train,
                                  orig_args_config=args_config,
@@ -298,6 +343,8 @@ if __name__ == '__main__':
                                  device=args.device,
                                  register_at_wandb=args.register_at_wandb,
                                  seed=args.seed,
+                                 deterministic=args.deterministic,
+                                 test_all_cardinality=args.test_all_cardinality,
                                  wandb_run_data=wandb_run_data,
                                  database=args.database,
                                  num_workers=args.num_workers,

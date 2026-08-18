@@ -650,7 +650,8 @@ def create_udf_feat_list(feature_statistics, plan_featurization, src, udf_graph,
             target_list_len = max(10, feature_statistics[feat]['no_vals'])
 
             if not multi_label_keep_duplicates:
-                values = list(set(value))  # only keep unique elements
+                # Preserve a stable feature order across Python processes.
+                values = sorted(set(value), key=repr)  # only keep unique elements
             else:
                 values = value
 

@@ -164,3 +164,7 @@ cython_debug/
 result_aggregation_notebooks/artifacts
 result_aggregation_notebooks/wandb
 result_aggregation_notebooks/wandb_*
+
+# Generated training artifacts and reports
+/saved/
+/results/
